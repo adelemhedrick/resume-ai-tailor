@@ -1,0 +1,98 @@
+\documentclass[11pt, a4paper, sans]{moderncv}
+\moderncvstyle{fancy} % Style options: 'casual' (default), 'classic', 'banking', 'oldstyle', 'fancy'
+\moderncvcolor{black} % Color options 'blue' (default), 'orange', 'green', 'red', 'purple', 'grey', 'black'
+
+\usepackage[scale=0.85]{geometry} % Adjust margin sizes
+\setlength{\hintscolumnwidth}{4cm} % Increase the width of the dates column if needed
+
+\name{Adele M.}{Hedrick, M.Sc}
+\address{Cobourg, Ontario}
+\phone[mobile]{+1 905-449-8435}
+\email{adele@hedrick.ca}
+
+\begin{document}
+\makecvtitle
+
+\section{Experience}
+\subsection{Datalogy}
+\cventry{April 2024 -- Present}{Data Science \& Eng. Consultant}{Toronto, ON}{}{}{
+    \begin{itemize}
+        \item Developing a prototype to demonstrate AI capabilities in extracting text and context from images, specifically targeting invoice processing.
+        \item \textbf{Skills:} Golang, SQL, Chat GPT API, Clojurescript
+    \end{itemize}
+}
+
+\subsection{InvestDefy}
+\cventry{Mar 2023 -- Jun 2023}{Data Science \& Eng. Consultant}{Toronto, ON}{}{}{
+    \begin{itemize}
+        \item Optimized Airflow DAGs for enhanced generality and reusability, significantly reducing development time and accelerating insight generation.
+        \item  Automated feature engineering and predictive modeling for cryptocurrency price trends.
+        \item \textbf{Skills:} Python, Apache Airflow, SQL, Extracting data from APIs
+    \end{itemize}
+}
+
+\subsection{360insights}
+\cventry{Jan 2021 -- Present}{Head Data Science}{Whitby, ON}{}{}{}
+\cventry{Nov 2020 -- Jul 2021}{Team Lead, Data Science}{}{}{}{}
+\cventry{Jul 2020 -- Nov 2020}{Data Science \& Engineering Consultant}{}{}{}{}
+\cventry{Jul 2018 -- Nov 2019}{Data Scientist}{}{}{}{}
+\cventry{Jul 2017 -- Jul 2018}{Software Developer}{}{}{}{
+    \begin{itemize}
+        \item Supported team members in creating custom integrations to send and receive data to/from Reltio, a Master Data Management Software.
+        \item Collaborated with Reltio Professional services to get our first set of domain entities and relationships modelled and populated with data in Reltio.
+        \item Created a CI/CD pipeline with GitActions to support the GitHub flow development workflow for the team to collaborate and share a single AWS development environment.
+        \item Worked alongside a Data Science expert in risk and fraud analytics to build a POC in a Jupyter Notebook.
+        \item Built a generic data pipeline that would clean, conduct feature selection, parameter tuning, train an XGBoost model, predict and analyse results.
+        \item Developed use case specific (risk) connector to extract data and generate over 300 features, which consisted of a Python script that would produce a SQL pipeline of thousands of lines of SQL.
+        \item Reduced manual risk analysis by 85\%, leaving 15\% of the claims to have the reviews augmented with information from the risk model to support the reviewer.
+        \item Scaled the forecasting service by building a generic forecasting service on AWS, capable of generating hundreds of forecasts in parallel, reducing the time to generate these reports from +24 hours to less than 15 minutes.
+        \item Created a robust unit testing system for the Forecasting service that would mock out external services to support the tests being executed in an isolated continuous integration environment.
+        \item Awarded for facilitating a positive team culture providing psychological safety resulting in more innovation and a high performing team.
+        \item Enabled actionable insights for multiple clients with rapidly developed Qlik dashboards.
+        \item Converted legacy hardcoded R scripts into parameterized Python scripts in preparation for deploying to AWS.
+        \item Elected to be one of 6 Culture Ambassadors for 2018/2019 at the Whitby headquarters, dedicated to promoting a positive culture in the workplace and community.
+        \item Generated ad-hoc reports, extracting data from multiple sources and formats, to investigate system behaviour, diagnose problems, and generate import files to correct data discrepancies.
+        \item Proposed and implemented a scheduled data pipeline to automate and operationalize the report generation process.
+        \item Collaborated with the Data Warehouse Architect to design the physical model of an Operational Data Store, aligning it with the analytics data store to optimize data integration and reporting capabilities.
+        \item Mentored intern students and facilitated their engagement with workplace culture.
+        \item Guided the technical strategy, supported team members and/or contributed directly in various projects: forecasting, predictive risk models, BI, data integrity monitoring and automated data recovery to correct discrepancies.
+        \item Developed a versatile utility enabling users to define data connections and analytics requirements via JSON, automating the generation of Excel spreadsheets and PowerPoint reports; includes a backend mechanism that constructs tailored star schema database tables to efficiently deliver the requested analytics.
+        \item \textbf{Skills:} Python, SQL, Docker, Reltio, AWS Lambda, AWS SQS/SNS, AWS Athena, GitActions, Risk Analysis, XGBoost, AWS Glue, AWS Step Functions, Forecasting, Pentaho, Qlik Sense
+    \end{itemize}
+}
+
+\subsection{RealTech}
+\cventry{Nov 2019 -- Mar 2020}{Data Scientist}{Whitby, ON}{}{}{
+    \begin{itemize}
+        \item Reduced turn around time of device calibration service by replacing a manual process with a pipeline that included querying an API. Supported engineering with RoHS compliance.
+        \item \textbf{Skills:} Python, SQL, Thingsboard, Datadog
+    \end{itemize}
+}
+
+\subsection{IBM Canada}
+\cventry{Mar 2016 -- May 2017}{Software Developer}{Toronto, ON}{}{}{
+    \begin{itemize}
+        \item Developed backend infrastructure for a learning management system (LMS), enhancing storage and organization of educational content. Led the creation of a data analytics-driven reporting system to improve course assessments and content.
+        \item \textbf{Skills:} PHP, IBM DB2, Node.js, Angular
+    \end{itemize}
+}
+
+\section{Certifications }
+\cvitem{2023}{Certified SAFe 6 Practitioner, Scaled Agile, Inc.}
+\cvitem{2020}{Design Thinking Applied to AI and Machine Learning Workshop, TMLS}
+
+\section{Education}
+\cventry{2015 -- 2017}{M.Sc in Computer Science}{}{Ontario Tech University}{}{\textit{GPA: 4.12}}
+\cventry{2013 -- 2014}{B.Ed in Education}{}{Ontario Tech University}{}{\textit{GPA: 4.0}}
+\cventry{2008 -- 2012}{B.Sc in Computer Science}{}{Ontario Tech University}{}{\textit{GPA: 3.54}}
+\cventry{2003 -- 2006}{Adv. 3-year Diploma in Multimedia Design}{}{Durham College}{}{}{}
+
+\section{Publications}
+\cventry{2018}{Modeling Transition and Mobility Patterns}{}{}{}{Discusses the modeling of user transitions and mobility patterns without cloud services, preserving privacy.}
+\cventry{2015}{Hierarchical Temporal Mobility Analysis with Semantic Labeling}{}{}{}{Focuses on deducing salient locations and mobility patterns from WiFi signals.}
+\cventry{2012}{Authoring Relational Queries on the Mobile Devices}{}{}{}{Describes the design and implementation of a user interface for interacting with a relational database on mobile devices.}
+
+\section{Projects}
+\cvitem{Recent}{\textbf{Generic Temporal Feature Generation}. Developed for Google Cloud Provider and BigQuery. Utilizes PySpark to create temporal features for data analysis.}
+
+\end{document}
