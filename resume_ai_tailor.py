@@ -1,48 +1,53 @@
 #!/usr/bin/env python3
 """
-This module, ResumeAiTailor, provides a comprehensive toolkit for tailoring resumes and cover letters
-to specific job postings. It utilizes AI services from OpenAI to analyze job descriptions and generate
-customized application documents. The module handles everything from fetching job postings online,
-processing LaTeX-based resume data, to generating tailored resumes and cover letters in both LaTeX and PDF formats.
+This module, ResumeAiTailor, provides a comprehensive toolkit for tailoring resumes and cover
+letters to specific job postings. It utilizes AI services from OpenAI to analyze job descriptions
+and generate customized application documents. The module handles everything from fetching job
+postings online, processing LaTeX-based resume data, to generating tailored resumes and cover
+letters in both LaTeX and PDF formats.
 
-The functionalities include web scraping, AI-driven content analysis and generation, LaTeX document manipulation,
-and PDF compilation. This module is designed to help job seekers create highly customized and optimized job application
-materials that significantly increase their chances of landing job interviews.
+The functionalities include web scraping, AI-driven content analysis and generation, LaTeX document
+manipulation, and PDF compilation. This module is designed to help job seekers create highly
+customized and optimized job application materials that significantly increase their chances of
+landing job interviews.
 """
-from __future__ import annotations  # This import is necessary for forward references in type hints
-from typing import Dict, List, Optional, Any, cast
+from __future__ import (
+    annotations,
+)  # This import is necessary for forward references in type hints
+from typing import Dict, Any, cast
 import argparse
-import base64
 import json
 import re
 from datetime import datetime
+import time
 import os
 import subprocess
-import requests
 from openai import OpenAI
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
-import time
 
 
-
-class ResumeAiTailor:
+class ResumeAiTailor:  # pylint: disable=too-many-instance-attributes
     """
-    The ResumeAiTailor class encapsulates methods for creating tailored resumes and cover letters based on job postings.
-    It automates the fetching of job content, analyzes it using AI, and tailors the resume and cover letter
-    to match job requirements. This class supports multiple steps including:
-    
+    The ResumeAiTailor class encapsulates methods for creating tailored resumes and cover letters
+    based on job postings.
+
+    It automates the fetching of job content, analyzes it using AI, and tailors the resume and cover
+    letter to match job requirements. This class supports multiple steps including:
+
     - Creating directories with timestamps for output management.
     - Fetching and parsing job postings from provided URLs.
-    - Integrating with OpenAI's API to generate text based on existing resumes and specific job descriptions.
+    - Integrating with OpenAI's API to generate text based on existing resumes and specific job
+        descriptions.
     - Compiling LaTeX documents into PDFs.
-    
-    This class provides a high-level interface to customize job application documents dynamically, aiming
-    to enhance the user's job application process by utilizing advanced AI content analysis and LaTeX document generation.
-    
+
+    This class provides a high-level interface to customize job application documents dynamically,
+    aiming to enhance the user's job application process by utilizing advanced AI content analysis
+    and LaTeX document generation.
+
     Attributes:
         full_resume_path (str): Path to the LaTeX file containing the user's full resume.
         job_posting_url (str): URL to the online job posting.
@@ -58,137 +63,8 @@ class ResumeAiTailor:
         cover_letter_tex_file (str): Path to the generated tailored cover letter LaTeX file.
         open_ai_client (OpenAI): Client object for interacting with OpenAI's API.
     """
+
     OUTPUT_DIRECTORY: str = "output"
-    RESUME_JSON_SCHEMA: str = """
-        {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "type": "object",
-      "properties": {
-        "skills": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "skill": {
-                "type": "string"
-              },
-              "details": {
-                "type": "string"
-              }
-            },
-            "required": ["skill", "details"]
-          }
-        },
-        "certificates": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "year": {
-                "type": "string"
-              },
-              "title": {
-                "type": "string"
-              }
-            },
-            "required": ["year", "title"]
-          }
-        },
-        "experience": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "company": {
-                "type": "string"
-              },
-              "location": {
-                "type": "string"
-              },
-              "roles": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "job_title": {
-                      "type": "string"
-                    },
-                    "period": {
-                      "type": "string"
-                    }
-                  },
-                  "required": ["job_title", "period"]
-                }
-              },
-              "description": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            },
-            "required": ["company", "location", "roles", "description"]
-          }
-        },
-        "education": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "year": {
-                "type": "string"
-              },
-              "degree": {
-                "type": "string"
-              },
-              "institution": {
-                "type": "string"
-              },
-              "GPA": {
-                "type": "string"
-              }
-            },
-            "required": ["year", "degree", "institution", "GPA"]
-          }
-        },
-        "publications": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "year": {
-                "type": "string"
-              },
-              "title": {
-                "type": "string"
-              },
-              "description": {
-                "type": "string"
-              }
-            },
-            "required": ["year", "title", "description"]
-          }
-        },
-        "projects": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string"
-              },
-              "description": {
-                "type": "string"
-              }
-            },
-            "required": ["name", "description"]
-          }
-        }
-      },
-      "additionalProperties": false,
-      "required": []
-        }
-        """
 
     EXTRACT_JOB_TITLE_AND_COMPANY_PROMPT: str = """
         Analyze the following job posting content:
@@ -233,12 +109,15 @@ class ResumeAiTailor:
         Analyze my resume currently in JSON format:
         {full_resume_content}
         
-        Create a cover letter using my resume for the job posting using the moderncv and fancy style.
+        Create a cover letter using my resume for the job posting using the moderncv and fancy
+        style.
         Return just the cover letter in LaTeX.
         Do not return anything before or after the LaTeX code and do not include ```
         """
 
-    def __init__(self, full_resume_path: str, job_posting_url: str, file_prefix: str) -> None:
+    def __init__(
+        self, full_resume_path: str, job_posting_url: str, file_prefix: str
+    ) -> None:
         """Initialize the ResumeAiTailor object with paths and URL."""
         self.full_resume_path: str = full_resume_path
         self.job_posting_url: str = job_posting_url
@@ -256,20 +135,22 @@ class ResumeAiTailor:
 
     def run(self) -> ResumeAiTailor:
         """Execute the main workflow of the ResumeAiTailor instance."""
-        (self.create_folder_with_timestamp()
-         .get_url_content()
-         .create_ai_client()
-         .load_full_resume()
-         .get_company_name_and_job_title()
-         .get_tailored_resume()
-         .get_tailored_cover_letter())
+        (
+            self.create_folder_with_timestamp()
+            .get_url_content()
+            .create_ai_client()
+            .load_full_resume()
+            .get_company_name_and_job_title()
+            .get_tailored_resume()
+            .get_tailored_cover_letter()
+        )
         return self
 
     def create_folder_with_timestamp(self):
         """Create an output folder with a timestamp to store results."""
         timestamp: str = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.output_folder = os.path.join(self.OUTPUT_DIRECTORY, f"resume_{timestamp}")
-        
+
         if not os.path.exists(self.output_folder):
             os.makedirs(self.output_folder)
             print(f"Folder created: {self.output_folder}")
@@ -282,109 +163,172 @@ class ResumeAiTailor:
         try:
             options: Options = Options()
             options.headless = True  # Run in headless mode
-            options.add_argument('--no-sandbox')
-            options.add_argument('--disable-dev-shm-usage')
-            options.add_argument('--disable-gpu')
-            options.add_argument('--window-size=1920x1080')
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+            options.add_argument("--disable-gpu")
+            options.add_argument("--window-size=1920x1080")
 
             service = Service(ChromeDriverManager().install())
 
             driver = webdriver.Chrome(service=service, options=options)
-            
+
             driver.get(self.job_posting_url)
             time.sleep(5)  # Wait for the page to load completely
-            
+
             self.job_posting_content = driver.find_element(By.TAG_NAME, "body").text
-            
-            #with open(f"{self.output_folder}/job_posting_content.txt", 'w') as file:
+
+            # with open(f"{self.output_folder}/job_posting_content.txt", 'w') as file:
             #    file.write(self.job_posting_content)
-            
-            print(f"Job posting content saved to job_posting_content.txt")
+
+            print("Job posting content saved to job_posting_content.txt")
             driver.quit()
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"An error occurred while fetching the job posting content: {e}")
-        
+
         return self
 
-    def load_full_resume(self) -> ResumeAiTailor:
-        """Load the full resume from a LaTeX file, extract personal information, and convert it to JSON format."""
-        with open(self.full_resume_path, 'r') as file:
+    def load_full_resume(  # pylint: disable=too-many-locals, too-many-statements
+        self,
+    ) -> ResumeAiTailor:
+        """
+        Load the full resume from a LaTeX file, extract personal information, and convert it to JSON
+        format.
+        """
+        with open(self.full_resume_path, "r", encoding="utf-8") as file:
             self.full_resume_latex = file.read()
 
         latex_content = self.full_resume_latex.replace("\\&", "__AND__")
 
-        name_match = re.search(r'\\name\{([^}]+)\}\{([^}]+)\}', latex_content)
-        address_match = re.search(r'\\address\{([^}]+)\}', latex_content)
-        phone_match = re.search(r'\\phone\[mobile\]\{([^}]+)\}', latex_content)
-        email_match = re.search(r'\\email\{([^}]+)\}', latex_content)
+        name_match = re.search(r"\\name\{([^}]+)\}\{([^}]+)\}", latex_content)
+        address_match = re.search(r"\\address\{([^}]+)\}", latex_content)
+        phone_match = re.search(r"\\phone\[mobile\]\{([^}]+)\}", latex_content)
+        email_match = re.search(r"\\email\{([^}]+)\}", latex_content)
 
         self.personal_information = {
             "name": f"{name_match.group(1)} {name_match.group(2)}",
             "address": address_match.group(1),
             "phone": phone_match.group(1),
-            "email": email_match.group(1)
+            "email": email_match.group(1),
         }
 
-        latex_content = re.search(r'\\begin\{document\}(.*?)\\end\{document\}', latex_content, re.DOTALL).group(1)
+        latex_content = re.search(
+            r"\\begin\{document\}(.*?)\\end\{document\}", latex_content, re.DOTALL
+        ).group(1)
 
         data = {}
 
-        skills_match = re.search(r'\\section\{Skills\}(.*?)\\section|$', latex_content, re.DOTALL)
+        skills_match = re.search(
+            r"\\section\{Skills\}(.*?)\\section|$", latex_content, re.DOTALL
+        )
         if skills_match:
             skills = skills_match.group(1)
-            skills_items = re.findall(r'\\cvitem\{([^}]+)\}\{([^}]+)\}', skills)
-            data['skills'] = [{"skill": item[0], "details": item[1]} for item in skills_items]
+            skills_items = re.findall(r"\\cvitem\{([^}]+)\}\{([^}]+)\}", skills)
+            data["skills"] = [
+                {"skill": item[0], "details": item[1]} for item in skills_items
+            ]
 
-        certificates_match = re.search(r'\\section\{Certifications\}(.*?)\\section|$', latex_content, re.DOTALL)
+        certificates_match = re.search(
+            r"\\section\{Certifications\}(.*?)\\section|$", latex_content, re.DOTALL
+        )
         if certificates_match:
             certificates_content = certificates_match.group(1)
-            certificates_items = re.findall(r'\\cvitem\{(\d+)\}\{([^}]+)\}', certificates_content)
-            data['certificates'] = [{"year": cert[0], "title": cert[1]} for cert in certificates_items]
+            certificates_items = re.findall(
+                r"\\cvitem\{(\d+)\}\{([^}]+)\}", certificates_content
+            )
+            data["certificates"] = [
+                {"year": cert[0], "title": cert[1]} for cert in certificates_items
+            ]
 
-        experience_match = re.search(r'\\section\{Experience\}(.*?)\\section|$', latex_content, re.DOTALL)
+        experience_match = re.search(
+            r"\\section\{Experience\}(.*?)\\section|$", latex_content, re.DOTALL
+        )
         if experience_match:
             data["experience"] = []
             experience_content = experience_match.group(1)
-            companies = re.findall(r'\\subsection\{(.+?)\}(.*?)(?=\\subsection|$)', experience_content, re.DOTALL)
+            companies = re.findall(
+                r"\\subsection\{(.+?)\}(.*?)(?=\\subsection|$)",
+                experience_content,
+                re.DOTALL,
+            )
             for company in companies:
                 company_name = company[0].strip()
                 company_content = company[1].strip()
 
-                roles = re.findall(r'\\cventry\{([^}]+)\}\{([^}]+)\}\{([^}]*)\}', company_content)
+                roles = re.findall(
+                    r"\\cventry\{([^}]+)\}\{([^}]+)\}\{([^}]*)\}", company_content
+                )
                 location = roles[0][2]
-                descriptions = re.findall(r'\\begin\{itemize\}(.*?)\\end\{itemize\}', company_content, re.DOTALL)
+                descriptions = re.findall(
+                    r"\\begin\{itemize\}(.*?)\\end\{itemize\}",
+                    company_content,
+                    re.DOTALL,
+                )
                 overall_description = []
                 if descriptions:
-                    overall_description = [item.strip() for item in re.findall(r'\\item (.+)', descriptions[-1])]
-                
-                role_details = [{"job_title": role[1], "period": role[0]} for role in roles]
+                    overall_description = [
+                        item.strip()
+                        for item in re.findall(r"\\item (.+)", descriptions[-1])
+                    ]
+
+                role_details = [
+                    {"job_title": role[1], "period": role[0]} for role in roles
+                ]
 
                 company_info = {
                     "company": company_name,
                     "location": location,
                     "roles": role_details,
-                    "description": overall_description
+                    "description": overall_description,
                 }
-                
+
                 data["experience"].append(company_info)
 
-        education_match = re.search(r'\\section\{Education\}(.*?)\\section|$', latex_content, re.DOTALL)
+        education_match = re.search(
+            r"\\section\{Education\}(.*?)\\section|$", latex_content, re.DOTALL
+        )
         if education_match:
             education_content = education_match.group(1)
-            education_items = re.findall(r'\\cventry\{([^}]+)\}\{([^}]+)\}\{([^}]*?)\}\{([^}]*?)\}\{(.*?)\}\{\}', education_content)
-            data['education'] = [{"year": edu[0], "degree": edu[1], "institution": edu[3], "GPA": edu[4].strip("\\textit{}")} for edu in education_items if "GPA" in edu[4]]
+            education_items = re.findall(
+                r"\\cventry\{([^}]+)\}\{([^}]+)\}\{([^}]*?)\}\{([^}]*?)\}\{(.*?)\}\{\}",
+                education_content,
+            )
+            data["education"] = [
+                {
+                    "year": edu[0],
+                    "degree": edu[1],
+                    "institution": edu[3],
+                    "GPA": edu[4].strip("\\textit{}"),
+                }
+                for edu in education_items
+                if "GPA" in edu[4]
+            ]
 
-        publication_match = re.search(r'\\section\{Publications\}(.*?)(\\section|$)', latex_content, re.DOTALL)
+        publication_match = re.search(
+            r"\\section\{Publications\}(.*?)(\\section|$)", latex_content, re.DOTALL
+        )
         if publication_match:
             publication_content = publication_match.group(1)
-            publication_items = re.findall(r'\\cventry\{([^}]+)\}\{([^}]+)\}\{\}\{\}\{\}\{([^}]+)\}', publication_content)
-            data['publications'] = [{"year": pub[0], "title": pub[1], "description": pub[2].strip()} for pub in publication_items]
+            publication_items = re.findall(
+                r"\\cventry\{([^}]+)\}\{([^}]+)\}\{\}\{\}\{\}\{([^}]+)\}",
+                publication_content,
+            )
+            data["publications"] = [
+                {"year": pub[0], "title": pub[1], "description": pub[2].strip()}
+                for pub in publication_items
+            ]
 
-        projects_match = re.search(r'\\section\{Projects\}(.*?)(\\section|$)', latex_content, re.DOTALL)
+        projects_match = re.search(
+            r"\\section\{Projects\}(.*?)(\\section|$)", latex_content, re.DOTALL
+        )
         if projects_match:
             projects = projects_match.group(1)
-            project_items = re.findall(r'\\cvitem\{\}\{\\textbf\{([^}]+)\}\.(.*?)\}', projects, re.DOTALL)
-            data['projects'] = [{"name": proj[0].strip(), "description": proj[1].strip()} for proj in project_items]
+            project_items = re.findall(
+                r"\\cvitem\{\}\{\\textbf\{([^}]+)\}\.(.*?)\}", projects, re.DOTALL
+            )
+            data["projects"] = [
+                {"name": proj[0].strip(), "description": proj[1].strip()}
+                for proj in project_items
+            ]
 
         def replace_in_dict(obj):
             if isinstance(obj, dict):
@@ -393,11 +337,11 @@ class ResumeAiTailor:
             elif isinstance(obj, list):
                 return [replace_in_dict(item) for item in obj]
             elif isinstance(obj, str):
-                return obj.replace('__AND__', '\\&')
+                return obj.replace("__AND__", "\\&")
             return obj
 
         self.full_resume_json = replace_in_dict(data)
-        #with open(f"{self.output_folder}/full_resume_as_json.json", 'w') as file:
+        # with open(f"{self.output_folder}/full_resume_as_json.json", 'w') as file:
         #    json.dump(data, file, indent=4)
 
         return self
@@ -410,21 +354,24 @@ class ResumeAiTailor:
     def send_open_ai_request(self, message: str) -> str:
         """Send a request to the OpenAI API and return the response as a LaTeX formatted string."""
         response = self.open_ai_client.chat.completions.create(
-                model="gpt-4-turbo",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": message,
-                    }
-                ],
-                max_tokens=1024,
-            )
+            model="gpt-4-turbo",
+            messages=[
+                {
+                    "role": "user",
+                    "content": message,
+                }
+            ],
+            max_tokens=1024,
+        )
         return cast(str, response.choices[0].message.content)
 
     def compile_latex_to_pdf(self, tex_file: str) -> None:
         """Compile a LaTeX file to PDF using xelatex and clean up auxiliary files."""
         try:
-            subprocess.run(['xelatex', '-output-directory=' + self.output_folder, tex_file], check=True)
+            subprocess.run(
+                ["xelatex", "-output-directory=" + self.output_folder, tex_file],
+                check=True,
+            )
             base_name = os.path.splitext(tex_file)[0]
             aux_files = [f"{base_name}.aux", f"{base_name}.log", f"{base_name}.out"]
             for aux_file in aux_files:
@@ -435,8 +382,12 @@ class ResumeAiTailor:
             print(f"An error occurred during the compilation: {e}")
 
     def get_company_name_and_job_title(self) -> ResumeAiTailor:
-        """Extract the company name and job title from the job posting content using the OpenAI API."""
-        message = self.EXTRACT_JOB_TITLE_AND_COMPANY_PROMPT.format(job_posting_content=self.job_posting_content)
+        """
+        Extract the company name and job title from the job posting content using the OpenAI API.
+        """
+        message = self.EXTRACT_JOB_TITLE_AND_COMPANY_PROMPT.format(
+            job_posting_content=self.job_posting_content
+        )
 
         posting_json = self.send_open_ai_request(message)
 
@@ -444,8 +395,8 @@ class ResumeAiTailor:
         self.company_name = posting_object["company_name"]
         self.job_title = posting_object["job_title"]
 
-        #json_file = f"{self.output_folder}/posting_info.json"
-        #with open(json_file, 'w') as file:
+        # json_file = f"{self.output_folder}/posting_info.json"
+        # with open(json_file, 'w') as file:
         #    file.write(posting_json)
         return self
 
@@ -455,64 +406,89 @@ class ResumeAiTailor:
         latex_output = ""
         for company in experience_data:
             latex_output += f"\\subsection{{{company['company']}}}\n"
-            num_roles = len(company['roles'])
-            for i, role in enumerate(company['roles']):
-                job_title = role['job_title']
-                if i == num_roles - 1 and company['description']:  # Check if it's the last role and there is a description
+            num_roles = len(company["roles"])
+            for i, role in enumerate(company["roles"]):
+                job_title = role["job_title"]
+                if (
+                    i == num_roles - 1 and company["description"]
+                ):  # Check if it's the last role and there is a description
                     # Open the last role with a description block
-                    latex_output += f"\\cventry{{{role['period']}}}{{{job_title}}}{{}}{{}}{{}}{{\n"
+                    latex_output += (
+                        f"\\cventry{{{role['period']}}}{{{job_title}}}{{}}{{}}{{}}{{\n"
+                    )
                     latex_output += "    \\begin{itemize}\n"
-                    for item in company['description']:
+                    for item in company["description"]:
                         latex_output += f"        \\item {item}\n"
                     latex_output += "    \\end{itemize}\n"
-                    latex_output += "}\n"  # Close the last role entry with the description inside
+                    latex_output += (
+                        "}\n"  # Close the last role entry with the description inside
+                    )
                 elif i == 0:
-                    latex_output += f"\\cventry{{{role['period']}}}{{{job_title}}}{{{company['location']}}}{{}}{{}}{{}}\n"
+                    latex_output += f"\\cventry{{{role['period']}}}{{{job_title}}}{{{company['location']}}}{{}}{{}}{{}}\n"  # pylint: disable=line-too-long
                 else:
                     # Standard role entry without description
-                    latex_output += f"\\cventry{{{role['period']}}}{{{job_title}}}{{}}{{}}{{}}{{}}\n"
+                    latex_output += f"\\cventry{{{role['period']}}}{{{job_title}}}{{}}{{}}{{}}{{}}\n"  # pylint: disable=line-too-long
             latex_output += "\n"
 
         return latex_output
 
     def get_tailored_resume(self) -> ResumeAiTailor:
-        """Generate a tailored resume by modifying experience sections based on the job posting and personal information."""
+        """
+        Generate a tailored resume by modifying experience sections based on the job posting and
+        personal information.
+        """
         tailored_experience = []
         for experience_original in self.full_resume_json["experience"]:
             experience_new = experience_original
-            message = self.COMPANY_PROMPT.format(job_posting_content=self.job_posting_content,
-                                                company=experience_new["company"],
-                                                company_description=experience_new["description"])
+            message = self.COMPANY_PROMPT.format(
+                job_posting_content=self.job_posting_content,
+                company=experience_new["company"],
+                company_description=experience_new["description"],
+            )
             response = self.send_open_ai_request(message)
             experience_new["description"] = json.loads(response)
             tailored_experience.append(experience_new)
 
-        #with open(f"{self.output_folder}/tailored_experience.json", 'w') as file:
+        # with open(f"{self.output_folder}/tailored_experience.json", 'w') as file:
         #    json.dump(tailored_experience, file, indent=4)
 
         tailored_resume_latex = self.full_resume_latex
-        experience_latex = self.json_to_latex_experience(tailored_experience).replace('\\', '\\\\')
-        tailored_resume_latex = re.sub(r'(?<=\\section{Experience}).*?(?=\\section)', experience_latex, tailored_resume_latex, flags=re.DOTALL)
-        
-        self.resume_tex_file = f"{self.output_folder}/{self.file_prefix}_{self.company_name}_{self.job_title}_resume.tex".replace(" ", "_")
+        experience_latex = self.json_to_latex_experience(tailored_experience).replace(
+            "\\", "\\\\"
+        )
+        tailored_resume_latex = re.sub(
+            r"(?<=\\section{Experience}).*?(?=\\section)",
+            experience_latex,
+            tailored_resume_latex,
+            flags=re.DOTALL,
+        )
 
-        with open(self.resume_tex_file, 'w') as file:
+        self.resume_tex_file = f"{self.output_folder}/{self.file_prefix}_{self.company_name}_{self.job_title}_resume.tex"  # pylint: disable=line-too-long
+        self.resume_tex_file = self.resume_tex_file.replace(" ", "_")
+
+        with open(self.resume_tex_file, "w", encoding="utf-8") as file:
             file.write(tailored_resume_latex)
 
         self.compile_latex_to_pdf(self.resume_tex_file)
         return self
 
     def get_tailored_cover_letter(self) -> ResumeAiTailor:
-        """Create a tailored cover letter using the personal information, resume content, and the job posting."""
-        message = self.COVER_LETTER_PROMPT.format(job_posting_content=self.job_posting_content,
-                                                  full_resume_content=self.full_resume_json,
-                                                  personal_information=json.dumps(self.personal_information, indent=4))
+        """
+        Create a tailored cover letter using the personal information, resume content, and the
+        job posting.
+        """
+        message = self.COVER_LETTER_PROMPT.format(
+            job_posting_content=self.job_posting_content,
+            full_resume_content=self.full_resume_json,
+            personal_information=json.dumps(self.personal_information, indent=4),
+        )
 
         tailored_cover_letter = self.send_open_ai_request(message)
 
-        self.cover_letter_tex_file = f"{self.output_folder}/{self.file_prefix}_{self.company_name}_{self.job_title}_cover_letter.tex".replace(" ", "_")
+        self.cover_letter_tex_file = f"{self.output_folder}/{self.file_prefix}_{self.company_name}_{self.job_title}_cover_letter.tex"  # pylint: disable=line-too-long
+        self.cover_letter_tex_file = self.cover_letter_tex_file.replace(" ", "_")
 
-        with open(self.cover_letter_tex_file, 'w') as file:
+        with open(self.cover_letter_tex_file, "w", encoding="utf-8") as file:
             file.write(tailored_cover_letter)
 
         self.compile_latex_to_pdf(self.cover_letter_tex_file)
@@ -520,14 +496,33 @@ class ResumeAiTailor:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Tailor your resume and cover letter to a job posting using AI.")
+    parser = argparse.ArgumentParser(
+        description="Tailor your resume and cover letter to a job posting using AI."
+    )
 
-    parser.add_argument("--resume", dest="full_resume_path", required=True, help="Path to the full resume in LaTeX format")
-    parser.add_argument("--job-posting-url", dest="job_posting_url", required=True, help="URL of the job posting")
-    parser.add_argument("--output-prefix", dest="file_prefix", required=True, help="Prefix for the output files")
+    parser.add_argument(
+        "--resume",
+        dest="full_resume_path",
+        required=True,
+        help="Path to the full resume in LaTeX format",
+    )
+    parser.add_argument(
+        "--job-posting-url",
+        dest="job_posting_url",
+        required=True,
+        help="URL of the job posting",
+    )
+    parser.add_argument(
+        "--output-prefix",
+        dest="file_prefix",
+        required=True,
+        help="Prefix for the output files",
+    )
 
     args = parser.parse_args()
 
-    ResumeAiTailor(full_resume_path=args.full_resume_path,
-                   job_posting_url=args.job_posting_url,
-                   file_prefix=args.file_prefix).run()
+    ResumeAiTailor(
+        full_resume_path=args.full_resume_path,
+        job_posting_url=args.job_posting_url,
+        file_prefix=args.file_prefix,
+    ).run()
