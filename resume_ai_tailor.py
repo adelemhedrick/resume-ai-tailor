@@ -10,7 +10,7 @@ and PDF compilation. This module is designed to help job seekers create highly c
 materials that significantly increase their chances of landing job interviews.
 """
 from __future__ import annotations  # This import is necessary for forward references in type hints
-
+from typing import Dict, List, Optional, Any, cast
 import argparse
 import base64
 import json
@@ -18,10 +18,8 @@ import re
 from datetime import datetime
 import os
 import subprocess
-from typing import cast
 import requests
 from openai import OpenAI
-
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
@@ -60,8 +58,8 @@ class ResumeAiTailor:
         cover_letter_tex_file (str): Path to the generated tailored cover letter LaTeX file.
         open_ai_client (OpenAI): Client object for interacting with OpenAI's API.
     """
-    OUTPUT_DIRECTORY = "output"
-    RESUME_JSON_SCHEMA = """
+    OUTPUT_DIRECTORY: str = "output"
+    RESUME_JSON_SCHEMA: str = """
         {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -192,7 +190,7 @@ class ResumeAiTailor:
         }
         """
 
-    EXTRACT_JOB_TITLE_AND_COMPANY_PROMPT = """
+    EXTRACT_JOB_TITLE_AND_COMPANY_PROMPT: str = """
         Analyze the following job posting content:
         {job_posting_content}
 
@@ -215,7 +213,7 @@ class ResumeAiTailor:
         Do not return anything before or after the JSON, and do not include ```
         """
 
-    COMPANY_PROMPT = """Analyze the following job posting content:
+    COMPANY_PROMPT: str = """Analyze the following job posting content:
         {job_posting_content}
 
         Analyze the experience I had at {company} which is a list in JSON format:
@@ -226,7 +224,7 @@ class ResumeAiTailor:
         Do not return anything before or after the JSON code and do not include ```
         """
 
-    COVER_LETTER_PROMPT = """Analyze the following job posting content:
+    COVER_LETTER_PROMPT: str = """Analyze the following job posting content:
         {job_posting_content}
 
         Here is my contact information:
@@ -245,13 +243,13 @@ class ResumeAiTailor:
         self.full_resume_path: str = full_resume_path
         self.job_posting_url: str = job_posting_url
         self.file_prefix: str = file_prefix
-        self.personal_information: dict = None
+        self.personal_information: Dict[str, str] = {}
         self.company_name: str = ""
         self.job_title: str = ""
         self.output_folder: str = ""
         self.job_posting_content: str = ""
         self.full_resume_latex: str = ""
-        self.full_resume_json: dict = None
+        self.full_resume_json: Dict[str, Any] = {}
         self.resume_tex_file: str = ""
         self.cover_letter_tex_file: str = ""
         self.open_ai_client: OpenAI = None
@@ -269,7 +267,7 @@ class ResumeAiTailor:
 
     def create_folder_with_timestamp(self):
         """Create an output folder with a timestamp to store results."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp: str = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.output_folder = os.path.join(self.OUTPUT_DIRECTORY, f"resume_{timestamp}")
         
         if not os.path.exists(self.output_folder):
@@ -282,7 +280,7 @@ class ResumeAiTailor:
     def get_url_content(self) -> ResumeAiTailor:
         """Fetch the job posting content from the provided URL using Selenium in headless mode."""
         try:
-            options = Options()
+            options: Options = Options()
             options.headless = True  # Run in headless mode
             options.add_argument('--no-sandbox')
             options.add_argument('--disable-dev-shm-usage')
@@ -410,21 +408,18 @@ class ResumeAiTailor:
         return self
 
     def send_open_ai_request(self, message: str) -> str:
-         """Send a request to the OpenAI API and return the response as a LaTeX formatted string."""
+        """Send a request to the OpenAI API and return the response as a LaTeX formatted string."""
         response = self.open_ai_client.chat.completions.create(
-            model="gpt-4-turbo",
-            messages=[
-                {
-                    "role": "user",
-                    "content": message,
-                }
-            ],
-            max_tokens=1024,
-        )
-        # Extract the LaTeX content and remove any \documentclass or \begin{document}, \end{document} commands
-        latex_content = response.choices[0].message.content
-        #latex_content = self.clean_latex_content(latex_content)
-        return cast(str, latex_content)
+                model="gpt-4-turbo",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": message,
+                    }
+                ],
+                max_tokens=1024,
+            )
+        return cast(str, response.choices[0].message.content)
 
     def compile_latex_to_pdf(self, tex_file: str) -> None:
         """Compile a LaTeX file to PDF using xelatex and clean up auxiliary files."""
@@ -481,7 +476,7 @@ class ResumeAiTailor:
         return latex_output
 
     def get_tailored_resume(self) -> ResumeAiTailor:
-         """Generate a tailored resume by modifying experience sections based on the job posting and personal information."""
+        """Generate a tailored resume by modifying experience sections based on the job posting and personal information."""
         tailored_experience = []
         for experience_original in self.full_resume_json["experience"]:
             experience_new = experience_original
