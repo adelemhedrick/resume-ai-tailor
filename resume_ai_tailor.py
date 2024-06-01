@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+"""
+This module, ResumeAiTailor, provides a comprehensive toolkit for tailoring resumes and cover letters
+to specific job postings. It utilizes AI services from OpenAI to analyze job descriptions and generate
+customized application documents. The module handles everything from fetching job postings online,
+processing LaTeX-based resume data, to generating tailored resumes and cover letters in both LaTeX and PDF formats.
+
+The functionalities include web scraping, AI-driven content analysis and generation, LaTeX document manipulation,
+and PDF compilation. This module is designed to help job seekers create highly customized and optimized job application
+materials that significantly increase their chances of landing job interviews.
+"""
 from __future__ import annotations  # This import is necessary for forward references in type hints
 
 import argparse
@@ -22,7 +32,34 @@ import time
 
 
 class ResumeAiTailor:
-
+    """
+    The ResumeAiTailor class encapsulates methods for creating tailored resumes and cover letters based on job postings.
+    It automates the fetching of job content, analyzes it using AI, and tailors the resume and cover letter
+    to match job requirements. This class supports multiple steps including:
+    
+    - Creating directories with timestamps for output management.
+    - Fetching and parsing job postings from provided URLs.
+    - Integrating with OpenAI's API to generate text based on existing resumes and specific job descriptions.
+    - Compiling LaTeX documents into PDFs.
+    
+    This class provides a high-level interface to customize job application documents dynamically, aiming
+    to enhance the user's job application process by utilizing advanced AI content analysis and LaTeX document generation.
+    
+    Attributes:
+        full_resume_path (str): Path to the LaTeX file containing the user's full resume.
+        job_posting_url (str): URL to the online job posting.
+        file_prefix (str): Prefix for naming output files, facilitating organized storage.
+        personal_information (dict): Extracted personal details from the resume.
+        company_name (str): Extracted or designated company name targeted in the job application.
+        job_title (str): Job title extracted from the job posting.
+        output_folder (str): Directory path for storing output files.
+        job_posting_content (str): Raw content fetched from the job posting URL.
+        full_resume_latex (str): LaTeX formatted string of the full resume.
+        full_resume_json (dict): Resume content converted into JSON format for processing.
+        resume_tex_file (str): Path to the generated tailored resume LaTeX file.
+        cover_letter_tex_file (str): Path to the generated tailored cover letter LaTeX file.
+        open_ai_client (OpenAI): Client object for interacting with OpenAI's API.
+    """
     OUTPUT_DIRECTORY = "output"
     RESUME_JSON_SCHEMA = """
         {
@@ -204,6 +241,7 @@ class ResumeAiTailor:
         """
 
     def __init__(self, full_resume_path: str, job_posting_url: str, file_prefix: str) -> None:
+        """Initialize the ResumeAiTailor object with paths and URL."""
         self.full_resume_path: str = full_resume_path
         self.job_posting_url: str = job_posting_url
         self.file_prefix: str = file_prefix
@@ -219,6 +257,7 @@ class ResumeAiTailor:
         self.open_ai_client: OpenAI = None
 
     def run(self) -> ResumeAiTailor:
+        """Execute the main workflow of the ResumeAiTailor instance."""
         (self.create_folder_with_timestamp()
          .get_url_content()
          .create_ai_client()
@@ -229,6 +268,7 @@ class ResumeAiTailor:
         return self
 
     def create_folder_with_timestamp(self):
+        """Create an output folder with a timestamp to store results."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.output_folder = os.path.join(self.OUTPUT_DIRECTORY, f"resume_{timestamp}")
         
@@ -240,6 +280,7 @@ class ResumeAiTailor:
         return self
 
     def get_url_content(self) -> ResumeAiTailor:
+        """Fetch the job posting content from the provided URL using Selenium in headless mode."""
         try:
             options = Options()
             options.headless = True  # Run in headless mode
@@ -257,8 +298,8 @@ class ResumeAiTailor:
             
             self.job_posting_content = driver.find_element(By.TAG_NAME, "body").text
             
-            with open(f"{self.output_folder}/job_posting_content.txt", 'w') as file:
-                file.write(self.job_posting_content)
+            #with open(f"{self.output_folder}/job_posting_content.txt", 'w') as file:
+            #    file.write(self.job_posting_content)
             
             print(f"Job posting content saved to job_posting_content.txt")
             driver.quit()
@@ -268,6 +309,7 @@ class ResumeAiTailor:
         return self
 
     def load_full_resume(self) -> ResumeAiTailor:
+        """Load the full resume from a LaTeX file, extract personal information, and convert it to JSON format."""
         with open(self.full_resume_path, 'r') as file:
             self.full_resume_latex = file.read()
 
@@ -357,16 +399,18 @@ class ResumeAiTailor:
             return obj
 
         self.full_resume_json = replace_in_dict(data)
-        with open(f"{self.output_folder}/full_resume_as_json.json", 'w') as file:
-            json.dump(data, file, indent=4)
+        #with open(f"{self.output_folder}/full_resume_as_json.json", 'w') as file:
+        #    json.dump(data, file, indent=4)
 
         return self
 
     def create_ai_client(self) -> ResumeAiTailor:
+        """Initialize the OpenAI client for making API calls."""
         self.open_ai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
         return self
 
     def send_open_ai_request(self, message: str) -> str:
+         """Send a request to the OpenAI API and return the response as a LaTeX formatted string."""
         response = self.open_ai_client.chat.completions.create(
             model="gpt-4-turbo",
             messages=[
@@ -383,6 +427,7 @@ class ResumeAiTailor:
         return cast(str, latex_content)
 
     def compile_latex_to_pdf(self, tex_file: str) -> None:
+        """Compile a LaTeX file to PDF using xelatex and clean up auxiliary files."""
         try:
             subprocess.run(['xelatex', '-output-directory=' + self.output_folder, tex_file], check=True)
             base_name = os.path.splitext(tex_file)[0]
@@ -395,6 +440,7 @@ class ResumeAiTailor:
             print(f"An error occurred during the compilation: {e}")
 
     def get_company_name_and_job_title(self) -> ResumeAiTailor:
+        """Extract the company name and job title from the job posting content using the OpenAI API."""
         message = self.EXTRACT_JOB_TITLE_AND_COMPANY_PROMPT.format(job_posting_content=self.job_posting_content)
 
         posting_json = self.send_open_ai_request(message)
@@ -403,13 +449,14 @@ class ResumeAiTailor:
         self.company_name = posting_object["company_name"]
         self.job_title = posting_object["job_title"]
 
-        json_file = f"{self.output_folder}/posting_info.json"
-        with open(json_file, 'w') as file:
-            file.write(posting_json)
+        #json_file = f"{self.output_folder}/posting_info.json"
+        #with open(json_file, 'w') as file:
+        #    file.write(posting_json)
         return self
 
     @staticmethod
     def json_to_latex_experience(experience_data):
+        """Convert experience data from JSON format back into LaTeX format."""
         latex_output = ""
         for company in experience_data:
             latex_output += f"\\subsection{{{company['company']}}}\n"
@@ -434,7 +481,7 @@ class ResumeAiTailor:
         return latex_output
 
     def get_tailored_resume(self) -> ResumeAiTailor:
-
+         """Generate a tailored resume by modifying experience sections based on the job posting and personal information."""
         tailored_experience = []
         for experience_original in self.full_resume_json["experience"]:
             experience_new = experience_original
@@ -445,15 +492,14 @@ class ResumeAiTailor:
             experience_new["description"] = json.loads(response)
             tailored_experience.append(experience_new)
 
-        with open(f"{self.output_folder}/tailored_experience.json", 'w') as file:
-            json.dump(tailored_experience, file, indent=4)
+        #with open(f"{self.output_folder}/tailored_experience.json", 'w') as file:
+        #    json.dump(tailored_experience, file, indent=4)
 
-        
         tailored_resume_latex = self.full_resume_latex
         experience_latex = self.json_to_latex_experience(tailored_experience).replace('\\', '\\\\')
         tailored_resume_latex = re.sub(r'(?<=\\section{Experience}).*?(?=\\section)', experience_latex, tailored_resume_latex, flags=re.DOTALL)
         
-        self.resume_tex_file = f"{self.output_folder}/{self.file_prefix}_{self.company_name}_{self.job_title}_resume.tex"
+        self.resume_tex_file = f"{self.output_folder}/{self.file_prefix}_{self.company_name}_{self.job_title}_resume.tex".replace(" ", "_")
 
         with open(self.resume_tex_file, 'w') as file:
             file.write(tailored_resume_latex)
@@ -462,13 +508,14 @@ class ResumeAiTailor:
         return self
 
     def get_tailored_cover_letter(self) -> ResumeAiTailor:
+        """Create a tailored cover letter using the personal information, resume content, and the job posting."""
         message = self.COVER_LETTER_PROMPT.format(job_posting_content=self.job_posting_content,
                                                   full_resume_content=self.full_resume_json,
                                                   personal_information=json.dumps(self.personal_information, indent=4))
 
         tailored_cover_letter = self.send_open_ai_request(message)
 
-        self.cover_letter_tex_file = f"{self.output_folder}/{self.file_prefix}_{self.company_name}_{self.job_title}_cover_letter.tex"
+        self.cover_letter_tex_file = f"{self.output_folder}/{self.file_prefix}_{self.company_name}_{self.job_title}_cover_letter.tex".replace(" ", "_")
 
         with open(self.cover_letter_tex_file, 'w') as file:
             file.write(tailored_cover_letter)

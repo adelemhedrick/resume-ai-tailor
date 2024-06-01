@@ -10,9 +10,6 @@
 mkdir -p /tmp/chrome-profile
 
 
-
-pdflatex resume.tex
-
 Setting up Ubuntu/WSL environment:
  sudo apt install texlive-base texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended texlive-xetex -y
 
