@@ -2,6 +2,8 @@
 
 This project is a work in progress so do what you will with that!
 
+At the moment it will only tailor the experience section of your resume and generate a cover letter.
+
 ## Overview
 
 **ResumeAiTailor** is a Python-based application designed to help job seekers tailor their resumes and cover letters to specific job postings. Utilizing AI services from OpenAI, the tool analyzes job descriptions and generates customized application documents. It handles everything from fetching job postings online, processing LaTeX-based resume data, to generating tailored resumes and cover letters in both LaTeX and PDF formats.
