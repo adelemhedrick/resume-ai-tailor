@@ -23,6 +23,7 @@ At the moment it will only tailor the experience section of your resume and gene
 - pip (Python package installer)
 - LaTeX distribution (e.g., TeX Live) to compile documents to PDF
 - Chromium or Google Chrome browser (for Selenium web driver)
+- Environment variable, `OPENAI_API_KEY`, set and populated with your OpenAI key
 
 ### Setting Up a Python Environment
 
