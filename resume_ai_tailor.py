@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-This module, ResumeAiTailor, provides a comprehensive toolkit for tailoring resumes and cover
+This module, ResumeAiTailorPipeline, provides a comprehensive toolkit for tailoring resumes and cover
 letters to specific job postings. It utilizes AI services from OpenAI to analyze job descriptions
 and generate customized application documents. The module handles everything from fetching job
 postings online, processing LaTeX-based resume data, to generating tailored resumes and cover
@@ -14,7 +14,8 @@ landing job interviews.
 from __future__ import (
     annotations,
 )  # This import is necessary for forward references in type hints
-from typing import Dict, Any, cast
+from typing import Dict, Any, cast, Optional, List, Union
+from abc import ABC, abstractmethod
 import argparse
 import json
 import re
@@ -30,124 +31,56 @@ from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 
 
-class ResumeAiTailor:  # pylint: disable=too-many-instance-attributes
+class ResumeAiTailorPipeline:  # pylint: disable=too-many-instance-attributes
     """
-    The ResumeAiTailor class encapsulates methods for creating tailored resumes and cover letters
-    based on job postings.
-
-    It automates the fetching of job content, analyzes it using AI, and tailors the resume and cover
-    letter to match job requirements. This class supports multiple steps including:
-
-    - Creating directories with timestamps for output management.
-    - Fetching and parsing job postings from provided URLs.
-    - Integrating with OpenAI's API to generate text based on existing resumes and specific job
-        descriptions.
-    - Compiling LaTeX documents into PDFs.
-
-    This class provides a high-level interface to customize job application documents dynamically,
-    aiming to enhance the user's job application process by utilizing advanced AI content analysis
-    and LaTeX document generation.
-
+    Manages the creation of tailored resumes and cover letters based on job postings.
+    
     Attributes:
-        full_resume_path (str): Path to the LaTeX file containing the user's full resume.
-        job_posting_url (str): URL to the online job posting.
-        file_prefix (str): Prefix for naming output files, facilitating organized storage.
-        personal_information (dict): Extracted personal details from the resume.
-        company_name (str): Extracted or designated company name targeted in the job application.
-        job_title (str): Job title extracted from the job posting.
-        output_folder (str): Directory path for storing output files.
-        job_posting_content (str): Raw content fetched from the job posting URL.
-        full_resume_latex (str): LaTeX formatted string of the full resume.
-        full_resume_json (dict): Resume content converted into JSON format for processing.
-        resume_tex_file (str): Path to the generated tailored resume LaTeX file.
-        cover_letter_tex_file (str): Path to the generated tailored cover letter LaTeX file.
-        open_ai_client (OpenAI): Client object for interacting with OpenAI's API.
+        resume_file_path (str): Path to the LaTeX resume file.
+        file_prefix (str): Prefix for naming output files.
+        job_posting (JobPosting): Job posting handler.
+        output_folder (str): Directory for storing output files.
+        resume (Resume): Resume document handler.
+        cover_letter (CoverLetter): Cover letter document handler.
     """
 
     OUTPUT_DIRECTORY: str = "output"
 
-    EXTRACT_JOB_TITLE_AND_COMPANY_PROMPT: str = """
-        Analyze the following job posting content:
-        {job_posting_content}
-
-        Return the company name and job title in JSON format using this json schema:
-        {{
-          "type": "object",
-          "properties": {{
-            "company_name": {{
-              "type": "string",
-              "description": "The name of the company where the job is located."
-            }},
-            "job_title": {{
-              "type": "string",
-              "description": "The title of the job."
-            }}
-          }},
-          "required": ["company", "job_title"]
-        }}
-
-        Do not return anything before or after the JSON, and do not include ```
-        """
-
-    COMPANY_PROMPT: str = """Analyze the following job posting content:
-        {job_posting_content}
-
-        Analyze the experience I had at {company} which is a list in JSON format:
-        {company_description}
-        
-        Tailor this list to the job posting and return a list back in the same JSON format.
-
-        Do not return anything before or after the JSON code and do not include ```
-        """
-
-    COVER_LETTER_PROMPT: str = """Analyze the following job posting content:
-        {job_posting_content}
-
-        Here is my contact information:
-        {personal_information}
-
-        Analyze my resume currently in JSON format:
-        {full_resume_content}
-        
-        Create a cover letter using my resume for the job posting using the moderncv and fancy
-        style.
-        Return just the cover letter in LaTeX.
-        Do not return anything before or after the LaTeX code and do not include ```
-        """
-
     def __init__(
-        self, full_resume_path: str, job_posting_url: str, file_prefix: str
+        self, resume_file_path: str, job_posting_url: str, file_prefix: str
     ) -> None:
-        """Initialize the ResumeAiTailor object with paths and URL."""
-        self.full_resume_path: str = full_resume_path
-        self.job_posting_url: str = job_posting_url
+        """
+        Initializes the pipeline with paths and settings for processing the resume and job posting.
+        
+        Args:
+            resume_file_path (str): Path to the LaTeX resume file.
+            job_posting_url (str): URL to the online job posting.
+            file_prefix (str): Prefix for generated files.
+        """
+        self.resume_file_path: str = resume_file_path
         self.file_prefix: str = file_prefix
-        self.personal_information: Dict[str, str] = {}
-        self.company_name: str = ""
-        self.job_title: str = ""
+        self.job_posting: JobPosting = JobPosting(job_posting_url)
         self.output_folder: str = ""
-        self.job_posting_content: str = ""
-        self.full_resume_latex: str = ""
-        self.full_resume_json: Dict[str, Any] = {}
-        self.resume_tex_file: str = ""
-        self.cover_letter_tex_file: str = ""
-        self.open_ai_client: OpenAI = None
+        self.resume: Resume = None
+        self.cover_letter: CoverLetter = None
 
     def run(self) -> ResumeAiTailor:
-        """Execute the main workflow of the ResumeAiTailor instance."""
-        (
-            self.create_folder_with_timestamp()
-            .get_url_content()
-            .create_ai_client()
-            .load_full_resume()
-            .get_company_name_and_job_title()
-            .get_tailored_resume()
-            .get_tailored_cover_letter()
-        )
+        """
+        Executes the entire pipeline process for resume and cover letter generation.
+        
+        Returns:
+            ResumeAiTailorPipeline: Self instance after processing.
+        """
+        (self.create_folder_with_timestamp().create_resume().create_cover_letter())
         return self
 
     def create_folder_with_timestamp(self):
-        """Create an output folder with a timestamp to store results."""
+        """
+        Creates a new output folder with a timestamp to avoid overwriting previous files.
+        
+        Returns:
+            ResumeAiTailorPipeline: Self instance with updated output folder path.
+        """
         timestamp: str = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.output_folder = os.path.join(self.OUTPUT_DIRECTORY, f"resume_{timestamp}")
 
@@ -158,75 +91,299 @@ class ResumeAiTailor:  # pylint: disable=too-many-instance-attributes
             print(f"Folder already exists: {self.output_folder}")
         return self
 
-    def get_url_content(self) -> ResumeAiTailor:
-        """Fetch the job posting content from the provided URL using Selenium in headless mode."""
-        try:
-            options: Options = Options()
-            options.headless = True  # Run in headless mode
-            options.add_argument("--no-sandbox")
-            options.add_argument("--disable-dev-shm-usage")
-            options.add_argument("--disable-gpu")
-            options.add_argument("--window-size=1920x1080")
-
-            service = Service(ChromeDriverManager().install())
-
-            driver = webdriver.Chrome(service=service, options=options)
-
-            driver.get(self.job_posting_url)
-            time.sleep(5)  # Wait for the page to load completely
-
-            self.job_posting_content = driver.find_element(By.TAG_NAME, "body").text
-
-            # with open(f"{self.output_folder}/job_posting_content.txt", 'w') as file:
-            #    file.write(self.job_posting_content)
-
-            print("Job posting content saved to job_posting_content.txt")
-            driver.quit()
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            print(f"An error occurred while fetching the job posting content: {e}")
-
+    def create_resume(self) -> ResumeAiTailorPipeline:
+        """
+        Creates a tailored resume based on the job posting.
+        
+        Returns:
+            ResumeAiTailorPipeline: Self instance with the created resume.
+        """
+        self.resume = (
+            Resume(
+                output_folder=self.output_folder,
+                file_prefix=self.file_prefix,
+                job_posting=self.job_posting,
+            )
+            .load(self.resume_file_path)
+            .create()
+            .save()
+        )
         return self
 
-    def load_full_resume(  # pylint: disable=too-many-locals, too-many-statements
-        self,
-    ) -> ResumeAiTailor:
+    def create_cover_letter(self) -> ResumeAiTailorPipeline:
         """
-        Load the full resume from a LaTeX file, extract personal information, and convert it to JSON
-        format.
+        Creates a tailored cover letter that complements the tailored resume.
+        
+        Returns:
+            ResumeAiTailorPipeline: Self instance with the created cover letter.
         """
-        with open(self.full_resume_path, "r", encoding="utf-8") as file:
-            self.full_resume_latex = file.read()
+        self.cover_letter = (
+            CoverLetter(
+                output_folder=self.output_folder,
+                file_prefix=self.file_prefix,
+                job_posting=self.job_posting,
+                resume=self.resume,
+            )
+            .create()
+            .save()
+        )
+        return self
 
-        latex_content = self.full_resume_latex.replace("\\&", "__AND__")
 
+class JobPosting:
+    """
+    Handles fetching and parsing of job posting details.
+    
+    Attributes:
+        job_posting_url (str): URL of the job posting.
+        job_posting_content (str): Raw content of the job posting.
+        company_name (str): Extracted company name from the posting.
+        job_title (str): Extracted job title from the posting.
+        ai_client (AIClient): Client for handling AI requests.
+    """
+    def __init__(self, job_posting_url: str):
+        """
+        Initializes the JobPosting object with the URL of the job posting.
+        
+        Args:
+            job_posting_url (str): URL of the job posting.
+        """
+        self.job_posting_url: str = job_posting_url
+        self.job_posting_content: str = None
+        self.company_name: str = None
+        self.job_title: str = None
+        self.ai_client: AIClient = AIClient()
+
+    def get(self) -> str:
+        """
+        Retrieves and stores the text content of the job posting from the web.
+        
+        Returns:
+            str: The text content of the job posting.
+        """
+        if self.job_posting_content is not None:
+            return self.job_posting_content
+        else:
+            try:
+                options: Options = Options()
+                options.headless = True  # Run in headless mode
+                options.add_argument("--no-sandbox")
+                options.add_argument("--disable-dev-shm-usage")
+                options.add_argument("--disable-gpu")
+                options.add_argument("--window-size=1920x1080")
+                service = Service(ChromeDriverManager().install())
+                driver = webdriver.Chrome(service=service, options=options)
+                driver.get(self.job_posting_url)
+                time.sleep(5)
+                self.job_posting_content = driver.find_element(By.TAG_NAME, "body").text
+                driver.quit()
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                print(f"An error occurred while fetching the job posting content: {e}")
+        return self.job_posting_content
+
+    def get_company_name_and_job_title(self) -> Tuple(str, str):
+        """
+        Extracts and returns the company name and job title from the job posting.
+        
+        Returns:
+            Tuple[str, str]: A tuple containing the company name and job title.
+        """
+        if self.company_name is not None and self.job_title is not None:
+            return self.company_name, self.job_title
+        else:
+            posting_json = self.ai_client.get_job_title_and_company(self.get())
+            posting_object = json.loads(posting_json)
+            self.company_name = posting_object["company_name"]
+            self.job_title = posting_object["job_title"]
+            return self.company_name, self.job_title
+
+
+class AIClient:
+    """
+    Provides functionalities to interact with the OpenAI API for processing job postings and resumes.
+    
+    Attributes:
+        open_ai_client (OpenAI): Instance of the OpenAI client.
+    """
+
+    def __init__(self):
+        """
+        Initializes the AI client with necessary API keys.
+        """
+        self.open_ai_client: OpenAI = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+    def send_open_ai_request(self, message: str) -> str:
+        """
+        Sends a request to the OpenAI API and returns the response.
+        
+        Args:
+            message (str): The message to be sent to the AI.
+        
+        Returns:
+            str: The AI's response as a string.
+        """
+        response = self.open_ai_client.chat.completions.create(
+            model="gpt-4-turbo",
+            messages=[
+                {
+                    "role": "user",
+                    "content": message,
+                }
+            ],
+            max_tokens=1024,
+        )
+        return cast(str, response.choices[0].message.content)
+
+    def get_job_title_and_company(self, job_posting_content: str) -> str:
+        """
+        Sends a job posting content to the AI to extract company name and job title.
+        
+        Args:
+            job_posting_content (str): The content of the job posting.
+        
+        Returns:
+            str: JSON string with the company name and job title.
+        """
+        message = f"""
+            Analyze the following job posting content:
+            {job_posting_content}
+
+            Return the company name and job title in JSON format using this json schema:
+            {{
+              "type": "object",
+              "properties": {{
+                "company_name": {{
+                  "type": "string",
+                  "description": "The name of the company where the job is located."
+                }},
+                "job_title": {{
+                  "type": "string",
+                  "description": "The title of the job."
+                }}
+              }},
+              "required": ["company", "job_title"]
+            }}
+
+            Do not return anything before or after the JSON, and do not include ```
+            """
+        return self.send_open_ai_request(message)
+
+    def get_tailored_work_experience(
+        self, job_posting_content: str, company: str, company_description: str
+    ) -> str:
+        """
+        Requests the AI to tailor the work experience description to the job posting.
+        
+        Args:
+            job_posting_content (str): The content of the job posting.
+            company (str): The name of the company where the experience was gained.
+            company_description (str): Description of the work done at the company.
+        
+        Returns:
+            str: Tailored work experience description.
+        """
+        message = f"""Analyze the following job posting content:
+        {job_posting_content}
+
+        Analyze the experience I had at {company} which is a list in JSON format:
+        {company_description}
+        
+        Tailor this list to the job posting and return a list back in the same JSON format.
+
+        Do not return anything before or after the JSON code and do not include ```
+        """
+        return self.send_open_ai_request(message)
+
+    def get_tailored_cover_letter(
+        self, job_posting_content: str, personal_information, resume_content
+    ) -> str:
+        """
+        Generates a tailored cover letter based on personal information and resume content.
+        
+        Args:
+            job_posting_content (str): The content of the job posting.
+            personal_information (str): Personal contact information.
+            resume_content (str): Content of the resume in JSON format.
+        
+        Returns:
+            str: Tailored cover letter in LaTeX format.
+        """
+        message = f"""Analyze the following job posting content:
+        {job_posting_content}
+
+        Here is my contact information:
+        {personal_information}
+
+        Analyze my resume currently in JSON format:
+        {resume_content}
+        
+        Create a cover letter using my resume for the job posting using the moderncv and fancy
+        style.
+        Return just the cover letter in LaTeX.
+        Do not return anything before or after the LaTeX code and do not include ```
+        """
+        return self.send_open_ai_request(message)
+
+
+class LaTeXtoJSONParser:
+    """
+    Provides methods to parse various sections of a LaTeX document into structured JSON data.
+    """
+    @staticmethod
+    def parse_personal_information(latex_content: str) -> Dict[str, str]:
+        """
+        Extracts personal information from the LaTeX content.
+
+        Args:
+            latex_content (str): The LaTeX content containing personal information.
+
+        Returns:
+            Dict[str, str]: A dictionary with keys 'name', 'address', 'phone', and 'email' mapped to their respective values.
+        """
+        latex_content = latex_content.replace("\\&", "__AND__")
         name_match = re.search(r"\\name\{([^}]+)\}\{([^}]+)\}", latex_content)
         address_match = re.search(r"\\address\{([^}]+)\}", latex_content)
         phone_match = re.search(r"\\phone\[mobile\]\{([^}]+)\}", latex_content)
         email_match = re.search(r"\\email\{([^}]+)\}", latex_content)
-
-        self.personal_information = {
+        return {
             "name": f"{name_match.group(1)} {name_match.group(2)}",
             "address": address_match.group(1),
             "phone": phone_match.group(1),
             "email": email_match.group(1),
         }
 
-        latex_content = re.search(
-            r"\\begin\{document\}(.*?)\\end\{document\}", latex_content, re.DOTALL
-        ).group(1)
+    @staticmethod
+    def parse_skills(latex_content: str) -> Optional[List[Dict[str, str]]]:
+        """
+        Extracts skills from the LaTeX content.
 
-        data = {}
+        Args:
+            latex_content (str): The LaTeX content containing the skills section.
 
+        Returns:
+            Optional[List[Dict[str, str]]]: A list of dictionaries, each containing 'skill' and 'details', or None if no skills found.
+        """
         skills_match = re.search(
             r"\\section\{Skills\}(.*?)\\section|$", latex_content, re.DOTALL
         )
         if skills_match:
             skills = skills_match.group(1)
             skills_items = re.findall(r"\\cvitem\{([^}]+)\}\{([^}]+)\}", skills)
-            data["skills"] = [
-                {"skill": item[0], "details": item[1]} for item in skills_items
-            ]
+            return [{"skill": item[0], "details": item[1]} for item in skills_items]
+        else:
+            return None
 
+    @staticmethod
+    def parse_certificates(latex_content: str) -> Optional[List[Dict[str, str]]]:
+        """
+        Extracts certificates from the LaTeX content.
+
+        Args:
+            latex_content (str): The LaTeX content containing the certifications section.
+
+        Returns:
+            Optional[List[Dict[str, str]]]: A list of dictionaries, each containing 'year' and 'title', or None if no certificates found.
+        """
         certificates_match = re.search(
             r"\\section\{Certifications\}(.*?)\\section|$", latex_content, re.DOTALL
         )
@@ -235,15 +392,28 @@ class ResumeAiTailor:  # pylint: disable=too-many-instance-attributes
             certificates_items = re.findall(
                 r"\\cvitem\{(\d+)\}\{([^}]+)\}", certificates_content
             )
-            data["certificates"] = [
-                {"year": cert[0], "title": cert[1]} for cert in certificates_items
-            ]
+            return [{"year": cert[0], "title": cert[1]} for cert in certificates_items]
+        else:
+            return None
 
+    @staticmethod
+    def parse_experience(
+        latex_content: str,
+    ) -> Optional[List[Dict[str, Union[str, List[str], List[Dict[str, str]]]]]]:
+        """
+        Extracts professional experience from the LaTeX content.
+
+        Args:
+            latex_content (str): The LaTeX content containing the experience section.
+
+        Returns:
+            Optional[List[Dict[str, Union[str, List[str], List[Dict[str, str]]]]]]: A list of dictionaries, each representing a company and including company name, location, roles, and descriptions, or None if no experience found.
+        """
         experience_match = re.search(
             r"\\section\{Experience\}(.*?)\\section|$", latex_content, re.DOTALL
         )
         if experience_match:
-            data["experience"] = []
+            experience_list = []
             experience_content = experience_match.group(1)
             companies = re.findall(
                 r"\\subsection\{(.+?)\}(.*?)(?=\\subsection|$)",
@@ -281,8 +451,22 @@ class ResumeAiTailor:  # pylint: disable=too-many-instance-attributes
                     "description": overall_description,
                 }
 
-                data["experience"].append(company_info)
+                experience_list.append(company_info)
+            return experience_list
+        else:
+            return None
 
+    @staticmethod
+    def parse_education(latex_content: str) -> Optional[List[Dict[str, str]]]:
+        """
+        Extracts education details from the LaTeX content.
+
+        Args:
+            latex_content (str): The LaTeX content containing the education section.
+
+        Returns:
+            Optional[List[Dict[str, str]]]: A list of dictionaries, each containing 'year', 'degree', 'institution', and 'GPA', or None if no education details found.
+        """
         education_match = re.search(
             r"\\section\{Education\}(.*?)\\section|$", latex_content, re.DOTALL
         )
@@ -292,7 +476,7 @@ class ResumeAiTailor:  # pylint: disable=too-many-instance-attributes
                 r"\\cventry\{([^}]+)\}\{([^}]+)\}\{([^}]*?)\}\{([^}]*?)\}\{(.*?)\}\{\}",
                 education_content,
             )
-            data["education"] = [
+            return [
                 {
                     "year": edu[0],
                     "degree": edu[1],
@@ -302,7 +486,20 @@ class ResumeAiTailor:  # pylint: disable=too-many-instance-attributes
                 for edu in education_items
                 if "GPA" in edu[4]
             ]
+        else:
+            return None
 
+    @staticmethod
+    def parse_publications(latex_content: str) -> Optional[List[Dict[str, str]]]:
+        """
+        Extracts publication details from the LaTeX content.
+
+        Args:
+            latex_content (str): The LaTeX content containing the publications section.
+
+        Returns:
+            Optional[List[Dict[str, str]]]: A list of dictionaries, each containing 'year', 'title', and 'description', or None if no publications found.
+        """
         publication_match = re.search(
             r"\\section\{Publications\}(.*?)(\\section|$)", latex_content, re.DOTALL
         )
@@ -312,11 +509,24 @@ class ResumeAiTailor:  # pylint: disable=too-many-instance-attributes
                 r"\\cventry\{([^}]+)\}\{([^}]+)\}\{\}\{\}\{\}\{([^}]+)\}",
                 publication_content,
             )
-            data["publications"] = [
+            return [
                 {"year": pub[0], "title": pub[1], "description": pub[2].strip()}
                 for pub in publication_items
             ]
+        else:
+            return None
 
+    @staticmethod
+    def parse_projects(latex_content: str) -> Optional[List[Dict[str, str]]]:
+        """
+        Extracts project details from the LaTeX content.
+
+        Args:
+            latex_content (str): The LaTeX content containing the projects section.
+
+        Returns:
+            Optional[List[Dict[str, str]]]: A list of dictionaries, each containing 'name' and 'description', or None if no projects found.
+        """
         projects_match = re.search(
             r"\\section\{Projects\}(.*?)(\\section|$)", latex_content, re.DOTALL
         )
@@ -325,10 +535,36 @@ class ResumeAiTailor:  # pylint: disable=too-many-instance-attributes
             project_items = re.findall(
                 r"\\cvitem\{\}\{\\textbf\{([^}]+)\}\.(.*?)\}", projects, re.DOTALL
             )
-            data["projects"] = [
+            return [
                 {"name": proj[0].strip(), "description": proj[1].strip()}
                 for proj in project_items
             ]
+        else:
+            return None
+
+    def parse_resume(self, latex_content) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Parses the entire LaTeX resume content into structured JSON format.
+
+        Args:
+            latex_content (str): The entire LaTeX content of a resume.
+
+        Returns:
+            Dict[str, List[Dict[str, Any]]]: A dictionary where each key corresponds to a section of the resume ('skills', 'certificates', 'experience', etc.) and each value is a list of parsed entities.
+        """
+        latex_content = latex_content.replace("\\&", "__AND__")
+        latex_content = re.search(
+            r"\\begin\{document\}(.*?)\\end\{document\}", latex_content, re.DOTALL
+        ).group(1)
+
+        resume = {
+            "skills": self.parse_skills(latex_content),
+            "certificates": self.parse_certificates(latex_content),
+            "experience": self.parse_experience(latex_content),
+            "education": self.parse_education(latex_content),
+            "publications": self.parse_publications(latex_content),
+            "projects": self.parse_projects(latex_content),
+        }
 
         def replace_in_dict(obj):
             if isinstance(obj, dict):
@@ -340,33 +576,48 @@ class ResumeAiTailor:  # pylint: disable=too-many-instance-attributes
                 return obj.replace("__AND__", "\\&")
             return obj
 
-        self.full_resume_json = replace_in_dict(data)
-        # with open(f"{self.output_folder}/full_resume_as_json.json", 'w') as file:
-        #    json.dump(data, file, indent=4)
+        return replace_in_dict(resume)
 
-        return self
 
-    def create_ai_client(self) -> ResumeAiTailor:
-        """Initialize the OpenAI client for making API calls."""
-        self.open_ai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-        return self
+class Document(ABC):
+    """
+    Abstract base class for documents generated in the ResumeAiTailorPipeline, such as resumes and cover letters.
 
-    def send_open_ai_request(self, message: str) -> str:
-        """Send a request to the OpenAI API and return the response as a LaTeX formatted string."""
-        response = self.open_ai_client.chat.completions.create(
-            model="gpt-4-turbo",
-            messages=[
-                {
-                    "role": "user",
-                    "content": message,
-                }
-            ],
-            max_tokens=1024,
-        )
-        return cast(str, response.choices[0].message.content)
+    Attributes:
+        output_folder (str): The directory where the document will be saved.
+        file_prefix (str): Prefix for the output files to help in organizing and identifying files easily.
+        job_posting (JobPosting): A reference to the job posting object which contains details like company name and job title.
+        ai_client (AIClient): Client to interact with AI services for generating content.
+        doc_type (str): Type of the document (e.g., 'resume' or 'cover_letter').
+        doc_content (str): The content of the document in LaTeX format.
+    """
+    def __init__(
+        self, output_folder: str, file_prefix: str, job_posting: JobPosting
+    ) -> None:
+        """
+        Initializes a Document object with necessary parameters and sets up an AI client.
+        """
+        self.output_folder: str = output_folder
+        self.file_prefix: str = file_prefix
+        self.job_posting: JobPosting = job_posting
+        self.ai_client: AIClient = AIClient()
+        self.doc_type: str = None
+        self.doc_content: str = None
+
+    @abstractmethod
+    def create(self) -> Document:
+        """
+        Abstract method to create the document content. Must be implemented by subclasses.
+        """
+        pass
 
     def compile_latex_to_pdf(self, tex_file: str) -> None:
-        """Compile a LaTeX file to PDF using xelatex and clean up auxiliary files."""
+        """
+        Compiles LaTeX file to a PDF document.
+
+        Args:
+            tex_file (str): The path to the LaTeX file to be compiled.
+        """
         try:
             subprocess.run(
                 ["xelatex", "-output-directory=" + self.output_folder, tex_file],
@@ -381,28 +632,75 @@ class ResumeAiTailor:  # pylint: disable=too-many-instance-attributes
         except subprocess.CalledProcessError as e:
             print(f"An error occurred during the compilation: {e}")
 
-    def get_company_name_and_job_title(self) -> ResumeAiTailor:
+    def save(self) -> Document:
         """
-        Extract the company name and job title from the job posting content using the OpenAI API.
+        Saves the document content to a file and compiles it to PDF.
+
+        Returns:
+            Document: The instance of the document with updated content.
         """
-        message = self.EXTRACT_JOB_TITLE_AND_COMPANY_PROMPT.format(
-            job_posting_content=self.job_posting_content
-        )
-
-        posting_json = self.send_open_ai_request(message)
-
-        posting_object = json.loads(posting_json)
-        self.company_name = posting_object["company_name"]
-        self.job_title = posting_object["job_title"]
-
-        # json_file = f"{self.output_folder}/posting_info.json"
-        # with open(json_file, 'w') as file:
-        #    file.write(posting_json)
+        company_name, job_title = self.job_posting.get_company_name_and_job_title()
+        file_name = f"{self.output_folder}/{self.file_prefix}_{company_name}_{job_title}_{self.doc_type}.tex"  # pylint: disable=line-too-long
+        file_name = file_name.replace(" ", "_")
+        with open(file_name, "w", encoding="utf-8") as file:
+            file.write(self.doc_content)
+        self.compile_latex_to_pdf(file_name)
         return self
 
+
+class Resume(Document):
+    """
+    Represents a tailored resume document.
+
+    Attributes:
+        resume (Dict[str, List[Dict[str, Any]]]): Structured data representing sections of the resume.
+        personal_information (Dict[str, str]): Personal details extracted from the resume.
+    """
+    def __init__(
+        self, output_folder: str, file_prefix: str, job_posting: JobPosting
+    ) -> None:
+        """
+        Initializes a Resume instance inheriting the Document base settings.
+        """
+        super().__init__(
+            output_folder=output_folder,
+            file_prefix=file_prefix,
+            job_posting=job_posting,
+        )
+
+        self.doc_type = "resume"
+        self.resume: Dict[str, List[Dict[str, Any]]] = None
+        self.personal_information: Dict[str, str] = None
+
+    def get_personal_information(self) -> Dict[str, str]:
+        """
+        Returns the personal information section of the resume.
+
+        Returns:
+            Dict[str, str]: A dictionary containing personal information such as name, address, phone, and email.
+        """
+        return self.personal_information
+
+    def get(self) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Returns the structured resume data.
+
+        Returns:
+            Dict[str, List[Dict[str, Any]]]: The entire structured data of the resume.
+        """
+        return self.resume
+
     @staticmethod
-    def json_to_latex_experience(experience_data):
-        """Convert experience data from JSON format back into LaTeX format."""
+    def json_to_latex_experience(experience_data: List[Dict]) -> str:
+        """
+        Converts JSON-formatted experience data back into LaTeX format.
+
+        Args:
+            experience_data (List[Dict]): The list of dictionaries containing experience details.
+
+        Returns:
+            str: LaTeX formatted string of experience details.
+        """
         latex_output = ""
         for company in experience_data:
             latex_output += f"\\subsection{{{company['company']}}}\n"
@@ -432,66 +730,93 @@ class ResumeAiTailor:  # pylint: disable=too-many-instance-attributes
 
         return latex_output
 
-    def get_tailored_resume(self) -> ResumeAiTailor:
+    def load(self, resume_file_path) -> Resume:
         """
-        Generate a tailored resume by modifying experience sections based on the job posting and
-        personal information.
+        Loads resume data from a LaTeX file and parses it into structured JSON.
+
+        Args:
+            resume_file_path (str): Path to the LaTeX resume file.
+
+        Returns:
+            Resume: The instance of this class with loaded and parsed data.
+        """
+        with open(resume_file_path, "r", encoding="utf-8") as file:
+            self.doc_content = file.read()
+
+        parser = LaTeXtoJSONParser()
+        self.personal_information = parser.parse_personal_information(self.doc_content)
+        self.resume = parser.parse_resume(self.doc_content)
+        return self
+
+    def create(self) -> Resume:
+        """
+        Creates a tailored resume based on the job description and other parameters.
+
+        Returns:
+            Resume: The instance of this class with tailored content.
         """
         tailored_experience = []
-        for experience_original in self.full_resume_json["experience"]:
-            experience_new = experience_original
-            message = self.COMPANY_PROMPT.format(
-                job_posting_content=self.job_posting_content,
-                company=experience_new["company"],
-                company_description=experience_new["description"],
+        for experience in self.resume["experience"]:
+            response = self.ai_client.get_tailored_work_experience(
+                job_posting_content=self.job_posting.get(),
+                company=experience["company"],
+                company_description=experience["description"],
             )
-            response = self.send_open_ai_request(message)
-            experience_new["description"] = json.loads(response)
-            tailored_experience.append(experience_new)
+            experience["description"] = json.loads(response)
+            tailored_experience.append(experience)
 
-        # with open(f"{self.output_folder}/tailored_experience.json", 'w') as file:
-        #    json.dump(tailored_experience, file, indent=4)
-
-        tailored_resume_latex = self.full_resume_latex
+        tailored_resume_latex = self.doc_content
         experience_latex = self.json_to_latex_experience(tailored_experience).replace(
             "\\", "\\\\"
         )
-        tailored_resume_latex = re.sub(
+        self.doc_content = re.sub(
             r"(?<=\\section{Experience}).*?(?=\\section)",
             experience_latex,
             tailored_resume_latex,
             flags=re.DOTALL,
         )
-
-        self.resume_tex_file = f"{self.output_folder}/{self.file_prefix}_{self.company_name}_{self.job_title}_resume.tex"  # pylint: disable=line-too-long
-        self.resume_tex_file = self.resume_tex_file.replace(" ", "_")
-
-        with open(self.resume_tex_file, "w", encoding="utf-8") as file:
-            file.write(tailored_resume_latex)
-
-        self.compile_latex_to_pdf(self.resume_tex_file)
         return self
 
-    def get_tailored_cover_letter(self) -> ResumeAiTailor:
+
+class CoverLetter(Document):
+    """
+    Represents a tailored cover letter document.
+
+    Attributes:
+        resume (Resume): Reference to the associated resume to ensure alignment between the resume and the cover letter.
+    """
+
+    def __init__(
+        self,
+        output_folder: str,
+        file_prefix: str,
+        job_posting: JobPosting,
+        resume: Resume,
+    ) -> None:
         """
-        Create a tailored cover letter using the personal information, resume content, and the
-        job posting.
+        Initializes a CoverLetter instance inheriting settings from the Document and associating it with a resume.
         """
-        message = self.COVER_LETTER_PROMPT.format(
-            job_posting_content=self.job_posting_content,
-            full_resume_content=self.full_resume_json,
-            personal_information=json.dumps(self.personal_information, indent=4),
+        super().__init__(
+            output_folder=output_folder,
+            file_prefix=file_prefix,
+            job_posting=job_posting,
         )
 
-        tailored_cover_letter = self.send_open_ai_request(message)
+        self.doc_type = "cover_letter"
+        self.resume: Resume = resume
 
-        self.cover_letter_tex_file = f"{self.output_folder}/{self.file_prefix}_{self.company_name}_{self.job_title}_cover_letter.tex"  # pylint: disable=line-too-long
-        self.cover_letter_tex_file = self.cover_letter_tex_file.replace(" ", "_")
+    def create(self) -> CoverLetter:
+        """
+        Creates a tailored cover letter using details from the job posting and the associated resume.
 
-        with open(self.cover_letter_tex_file, "w", encoding="utf-8") as file:
-            file.write(tailored_cover_letter)
-
-        self.compile_latex_to_pdf(self.cover_letter_tex_file)
+        Returns:
+            CoverLetter: The instance of this class with the tailored cover letter content.
+        """
+        self.doc_content = self.ai_client.get_tailored_cover_letter(
+            job_posting_content=self.job_posting.get(),
+            personal_information=self.resume.get_personal_information(),
+            resume_content=self.resume.get(),
+        )
         return self
 
 
@@ -502,7 +827,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--resume",
-        dest="full_resume_path",
+        dest="resume_file_path",
         required=True,
         help="Path to the full resume in LaTeX format",
     )
@@ -521,8 +846,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    ResumeAiTailor(
-        full_resume_path=args.full_resume_path,
+    ResumeAiTailorPipeline(
+        resume_file_path=args.resume_file_path,
         job_posting_url=args.job_posting_url,
         file_prefix=args.file_prefix,
     ).run()
