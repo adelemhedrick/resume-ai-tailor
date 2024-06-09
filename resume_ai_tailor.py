@@ -57,12 +57,12 @@ class ResumeAiTailorPipeline:  # pylint: disable=too-many-instance-attributes
             job_posting_url (str): URL to the online job posting.
             file_prefix (str): Prefix for generated files.
         """
-        self.resume_file_path: str = resume_file_path
-        self.file_prefix: str = file_prefix
-        self.job_posting: JobPosting = JobPosting(job_posting_url)
-        self.output_folder: str = ""
-        self.resume: Resume = None
-        self.cover_letter: CoverLetter = None
+        self._resume_file_path: str = resume_file_path
+        self._file_prefix: str = file_prefix
+        self._job_posting: JobPosting = JobPosting(job_posting_url)
+        self._output_folder: str = ""
+        self._resume: Resume = None
+        self._cover_letter: CoverLetter = None
 
     def run(self) -> ResumeAiTailor:
         """
@@ -71,10 +71,10 @@ class ResumeAiTailorPipeline:  # pylint: disable=too-many-instance-attributes
         Returns:
             ResumeAiTailorPipeline: Self instance after processing.
         """
-        (self.create_folder_with_timestamp().create_resume().create_cover_letter())
+        (self._create_folder_with_timestamp()._create_resume()._create_cover_letter())
         return self
 
-    def create_folder_with_timestamp(self):
+    def _create_folder_with_timestamp(self):
         """
         Creates a new output folder with a timestamp to avoid overwriting previous files.
         
@@ -82,35 +82,35 @@ class ResumeAiTailorPipeline:  # pylint: disable=too-many-instance-attributes
             ResumeAiTailorPipeline: Self instance with updated output folder path.
         """
         timestamp: str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.output_folder = os.path.join(self.OUTPUT_DIRECTORY, f"resume_{timestamp}")
+        self._output_folder = os.path.join(self.OUTPUT_DIRECTORY, f"resume_{timestamp}")
 
-        if not os.path.exists(self.output_folder):
-            os.makedirs(self.output_folder)
-            print(f"Folder created: {self.output_folder}")
+        if not os.path.exists(self._output_folder):
+            os.makedirs(self._output_folder)
+            print(f"Folder created: {self._output_folder}")
         else:
-            print(f"Folder already exists: {self.output_folder}")
+            print(f"Folder already exists: {self._output_folder}")
         return self
 
-    def create_resume(self) -> ResumeAiTailorPipeline:
+    def _create_resume(self) -> ResumeAiTailorPipeline:
         """
         Creates a tailored resume based on the job posting.
         
         Returns:
             ResumeAiTailorPipeline: Self instance with the created resume.
         """
-        self.resume = (
+        self._resume = (
             Resume(
-                output_folder=self.output_folder,
-                file_prefix=self.file_prefix,
-                job_posting=self.job_posting,
+                output_folder=self._output_folder,
+                file_prefix=self._file_prefix,
+                job_posting=self._job_posting,
             )
-            .load(self.resume_file_path)
+            .load(self._resume_file_path)
             .create()
             .save()
         )
         return self
 
-    def create_cover_letter(self) -> ResumeAiTailorPipeline:
+    def _create_cover_letter(self) -> ResumeAiTailorPipeline:
         """
         Creates a tailored cover letter that complements the tailored resume.
         
@@ -119,10 +119,10 @@ class ResumeAiTailorPipeline:  # pylint: disable=too-many-instance-attributes
         """
         self.cover_letter = (
             CoverLetter(
-                output_folder=self.output_folder,
-                file_prefix=self.file_prefix,
-                job_posting=self.job_posting,
-                resume=self.resume,
+                output_folder=self._output_folder,
+                file_prefix=self._file_prefix,
+                job_posting=self._job_posting,
+                resume=self._resume,
             )
             .create()
             .save()
@@ -148,11 +148,11 @@ class JobPosting:
         Args:
             job_posting_url (str): URL of the job posting.
         """
-        self.job_posting_url: str = job_posting_url
-        self.job_posting_content: str = None
-        self.company_name: str = None
-        self.job_title: str = None
-        self.ai_client: AIClient = AIClient()
+        self._job_posting_url: str = job_posting_url
+        self._job_posting_content: str = None
+        self._company_name: str = None
+        self._job_title: str = None
+        self._ai_client: AIClient = AIClient()
 
     def get(self) -> str:
         """
@@ -161,8 +161,8 @@ class JobPosting:
         Returns:
             str: The text content of the job posting.
         """
-        if self.job_posting_content is not None:
-            return self.job_posting_content
+        if self._job_posting_content is not None:
+            return self._job_posting_content
         else:
             try:
                 options: Options = Options()
@@ -173,13 +173,13 @@ class JobPosting:
                 options.add_argument("--window-size=1920x1080")
                 service = Service(ChromeDriverManager().install())
                 driver = webdriver.Chrome(service=service, options=options)
-                driver.get(self.job_posting_url)
+                driver.get(self._job_posting_url)
                 time.sleep(5)
-                self.job_posting_content = driver.find_element(By.TAG_NAME, "body").text
+                self._job_posting_content = driver.find_element(By.TAG_NAME, "body").text
                 driver.quit()
             except Exception as e:  # pylint: disable=broad-exception-caught
                 print(f"An error occurred while fetching the job posting content: {e}")
-        return self.job_posting_content
+        return self._job_posting_content
 
     def get_company_name_and_job_title(self) -> Tuple(str, str):
         """
@@ -188,14 +188,14 @@ class JobPosting:
         Returns:
             Tuple[str, str]: A tuple containing the company name and job title.
         """
-        if self.company_name is not None and self.job_title is not None:
-            return self.company_name, self.job_title
+        if self._company_name is not None and self._job_title is not None:
+            return self._company_name, self._job_title
         else:
-            posting_json = self.ai_client.get_job_title_and_company(self.get())
+            posting_json = self._ai_client.get_job_title_and_company(self.get())
             posting_object = json.loads(posting_json)
-            self.company_name = posting_object["company_name"]
-            self.job_title = posting_object["job_title"]
-            return self.company_name, self.job_title
+            self._company_name = posting_object["company_name"]
+            self._job_title = posting_object["job_title"]
+            return self._company_name, self._job_title
 
 
 class AIClient:
@@ -210,9 +210,9 @@ class AIClient:
         """
         Initializes the AI client with necessary API keys.
         """
-        self.open_ai_client: OpenAI = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+        self._open_ai_client: OpenAI = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-    def send_open_ai_request(self, message: str) -> str:
+    def _send_open_ai_request(self, message: str) -> str:
         """
         Sends a request to the OpenAI API and returns the response.
         
@@ -222,7 +222,7 @@ class AIClient:
         Returns:
             str: The AI's response as a string.
         """
-        response = self.open_ai_client.chat.completions.create(
+        response = self._open_ai_client.chat.completions.create(
             model="gpt-4-turbo",
             messages=[
                 {
@@ -266,7 +266,7 @@ class AIClient:
 
             Do not return anything before or after the JSON, and do not include ```
             """
-        return self.send_open_ai_request(message)
+        return self._send_open_ai_request(message)
 
     def get_tailored_work_experience(
         self, job_posting_content: str, company: str, company_description: str
@@ -292,7 +292,7 @@ class AIClient:
 
         Do not return anything before or after the JSON code and do not include ```
         """
-        return self.send_open_ai_request(message)
+        return self._send_open_ai_request(message)
 
     def get_tailored_cover_letter(
         self, job_posting_content: str, personal_information, resume_content
@@ -322,7 +322,7 @@ class AIClient:
         Return just the cover letter in LaTeX.
         Do not return anything before or after the LaTeX code and do not include ```
         """
-        return self.send_open_ai_request(message)
+        return self._send_open_ai_request(message)
 
 
 class LaTeXtoJSONParser:
@@ -353,7 +353,7 @@ class LaTeXtoJSONParser:
         }
 
     @staticmethod
-    def parse_skills(latex_content: str) -> Optional[List[Dict[str, str]]]:
+    def _parse_skills(latex_content: str) -> Optional[List[Dict[str, str]]]:
         """
         Extracts skills from the LaTeX content.
 
@@ -374,7 +374,7 @@ class LaTeXtoJSONParser:
             return None
 
     @staticmethod
-    def parse_certificates(latex_content: str) -> Optional[List[Dict[str, str]]]:
+    def _parse_certificates(latex_content: str) -> Optional[List[Dict[str, str]]]:
         """
         Extracts certificates from the LaTeX content.
 
@@ -397,7 +397,7 @@ class LaTeXtoJSONParser:
             return None
 
     @staticmethod
-    def parse_experience(
+    def _parse_experience(
         latex_content: str,
     ) -> Optional[List[Dict[str, Union[str, List[str], List[Dict[str, str]]]]]]:
         """
@@ -457,7 +457,7 @@ class LaTeXtoJSONParser:
             return None
 
     @staticmethod
-    def parse_education(latex_content: str) -> Optional[List[Dict[str, str]]]:
+    def _parse_education(latex_content: str) -> Optional[List[Dict[str, str]]]:
         """
         Extracts education details from the LaTeX content.
 
@@ -490,7 +490,7 @@ class LaTeXtoJSONParser:
             return None
 
     @staticmethod
-    def parse_publications(latex_content: str) -> Optional[List[Dict[str, str]]]:
+    def _parse_publications(latex_content: str) -> Optional[List[Dict[str, str]]]:
         """
         Extracts publication details from the LaTeX content.
 
@@ -517,7 +517,7 @@ class LaTeXtoJSONParser:
             return None
 
     @staticmethod
-    def parse_projects(latex_content: str) -> Optional[List[Dict[str, str]]]:
+    def _parse_projects(latex_content: str) -> Optional[List[Dict[str, str]]]:
         """
         Extracts project details from the LaTeX content.
 
@@ -558,12 +558,12 @@ class LaTeXtoJSONParser:
         ).group(1)
 
         resume = {
-            "skills": self.parse_skills(latex_content),
-            "certificates": self.parse_certificates(latex_content),
-            "experience": self.parse_experience(latex_content),
-            "education": self.parse_education(latex_content),
-            "publications": self.parse_publications(latex_content),
-            "projects": self.parse_projects(latex_content),
+            "skills": self._parse_skills(latex_content),
+            "certificates": self._parse_certificates(latex_content),
+            "experience": self._parse_experience(latex_content),
+            "education": self._parse_education(latex_content),
+            "publications": self._parse_publications(latex_content),
+            "projects": self._parse_projects(latex_content),
         }
 
         def replace_in_dict(obj):
@@ -597,12 +597,12 @@ class Document(ABC):
         """
         Initializes a Document object with necessary parameters and sets up an AI client.
         """
-        self.output_folder: str = output_folder
-        self.file_prefix: str = file_prefix
-        self.job_posting: JobPosting = job_posting
-        self.ai_client: AIClient = AIClient()
-        self.doc_type: str = None
-        self.doc_content: str = None
+        self._output_folder: str = output_folder
+        self._file_prefix: str = file_prefix
+        self._job_posting: JobPosting = job_posting
+        self._ai_client: AIClient = AIClient()
+        self._doc_type: str = None
+        self._doc_content: str = None
 
     @abstractmethod
     def create(self) -> Document:
@@ -611,7 +611,7 @@ class Document(ABC):
         """
         pass
 
-    def compile_latex_to_pdf(self, tex_file: str) -> None:
+    def _compile_latex_to_pdf(self, tex_file: str) -> None:
         """
         Compiles LaTeX file to a PDF document.
 
@@ -620,7 +620,7 @@ class Document(ABC):
         """
         try:
             subprocess.run(
-                ["xelatex", "-output-directory=" + self.output_folder, tex_file],
+                ["xelatex", "-output-directory=" + self._output_folder, tex_file],
                 check=True,
             )
             base_name = os.path.splitext(tex_file)[0]
@@ -639,12 +639,12 @@ class Document(ABC):
         Returns:
             Document: The instance of the document with updated content.
         """
-        company_name, job_title = self.job_posting.get_company_name_and_job_title()
-        file_name = f"{self.output_folder}/{self.file_prefix}_{company_name}_{job_title}_{self.doc_type}.tex"  # pylint: disable=line-too-long
+        company_name, job_title = self._job_posting.get_company_name_and_job_title()
+        file_name = f"{self._output_folder}/{self._file_prefix}_{company_name}_{job_title}_{self._doc_type}.tex"  # pylint: disable=line-too-long
         file_name = file_name.replace(" ", "_")
         with open(file_name, "w", encoding="utf-8") as file:
-            file.write(self.doc_content)
-        self.compile_latex_to_pdf(file_name)
+            file.write(self._doc_content)
+        self._compile_latex_to_pdf(file_name)
         return self
 
 
@@ -668,9 +668,9 @@ class Resume(Document):
             job_posting=job_posting,
         )
 
-        self.doc_type = "resume"
-        self.resume: Dict[str, List[Dict[str, Any]]] = None
-        self.personal_information: Dict[str, str] = None
+        self._doc_type = "resume"
+        self._resume: Dict[str, List[Dict[str, Any]]] = None
+        self._personal_information: Dict[str, str] = None
 
     def get_personal_information(self) -> Dict[str, str]:
         """
@@ -679,7 +679,7 @@ class Resume(Document):
         Returns:
             Dict[str, str]: A dictionary containing personal information such as name, address, phone, and email.
         """
-        return self.personal_information
+        return self._personal_information
 
     def get(self) -> Dict[str, List[Dict[str, Any]]]:
         """
@@ -688,10 +688,10 @@ class Resume(Document):
         Returns:
             Dict[str, List[Dict[str, Any]]]: The entire structured data of the resume.
         """
-        return self.resume
+        return self._resume
 
     @staticmethod
-    def json_to_latex_experience(experience_data: List[Dict]) -> str:
+    def _json_to_latex_experience(experience_data: List[Dict]) -> str:
         """
         Converts JSON-formatted experience data back into LaTeX format.
 
@@ -741,11 +741,11 @@ class Resume(Document):
             Resume: The instance of this class with loaded and parsed data.
         """
         with open(resume_file_path, "r", encoding="utf-8") as file:
-            self.doc_content = file.read()
+            self._doc_content = file.read()
 
         parser = LaTeXtoJSONParser()
-        self.personal_information = parser.parse_personal_information(self.doc_content)
-        self.resume = parser.parse_resume(self.doc_content)
+        self._personal_information = parser.parse_personal_information(self._doc_content)
+        self._resume = parser.parse_resume(self._doc_content)
         return self
 
     def create(self) -> Resume:
@@ -756,20 +756,20 @@ class Resume(Document):
             Resume: The instance of this class with tailored content.
         """
         tailored_experience = []
-        for experience in self.resume["experience"]:
-            response = self.ai_client.get_tailored_work_experience(
-                job_posting_content=self.job_posting.get(),
+        for experience in self._resume["experience"]:
+            response = self._ai_client.get_tailored_work_experience(
+                job_posting_content=self._job_posting.get(),
                 company=experience["company"],
                 company_description=experience["description"],
             )
             experience["description"] = json.loads(response)
             tailored_experience.append(experience)
 
-        tailored_resume_latex = self.doc_content
-        experience_latex = self.json_to_latex_experience(tailored_experience).replace(
+        tailored_resume_latex = self._doc_content
+        experience_latex = self._json_to_latex_experience(tailored_experience).replace(
             "\\", "\\\\"
         )
-        self.doc_content = re.sub(
+        self._doc_content = re.sub(
             r"(?<=\\section{Experience}).*?(?=\\section)",
             experience_latex,
             tailored_resume_latex,
@@ -802,8 +802,8 @@ class CoverLetter(Document):
             job_posting=job_posting,
         )
 
-        self.doc_type = "cover_letter"
-        self.resume: Resume = resume
+        self._doc_type = "cover_letter"
+        self._resume: Resume = resume
 
     def create(self) -> CoverLetter:
         """
@@ -812,10 +812,10 @@ class CoverLetter(Document):
         Returns:
             CoverLetter: The instance of this class with the tailored cover letter content.
         """
-        self.doc_content = self.ai_client.get_tailored_cover_letter(
-            job_posting_content=self.job_posting.get(),
-            personal_information=self.resume.get_personal_information(),
-            resume_content=self.resume.get(),
+        self._doc_content = self._ai_client.get_tailored_cover_letter(
+            job_posting_content=self._job_posting.get(),
+            personal_information=self._resume.get_personal_information(),
+            resume_content=self._resume.get(),
         )
         return self
 
