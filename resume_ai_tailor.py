@@ -692,9 +692,10 @@ class Resume(Document):
             job_posting=job_posting,
         )
 
-        self._doc_type = "resume"
+        self._doc_type: str = "resume"
         self._resume: Dict[str, List[Dict[str, Any]]] = None
         self._personal_information: Dict[str, str] = None
+        self._parser: LaTeXtoJSONParser = LaTeXtoJSONParser()
 
     def get_personal_information(self) -> Dict[str, str]:
         """
@@ -768,11 +769,10 @@ class Resume(Document):
         with open(resume_file_path, "r", encoding="utf-8") as file:
             self._doc_content = file.read()
 
-        parser = LaTeXtoJSONParser()
-        self._personal_information = parser.parse_personal_information(
+        self._personal_information = self._parser.parse_personal_information(
             self._doc_content
         )
-        self._resume = parser.parse_resume(self._doc_content)
+        self._resume = self._parser.parse_resume(self._doc_content)
         return self
 
     def create(self) -> Resume:
@@ -831,7 +831,7 @@ class CoverLetter(Document):
             job_posting=job_posting,
         )
 
-        self._doc_type = "cover_letter"
+        self._doc_type: str = "cover_letter"
         self._resume: Resume = resume
 
     def create(self) -> CoverLetter:

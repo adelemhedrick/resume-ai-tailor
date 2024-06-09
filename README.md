@@ -73,3 +73,9 @@ python resume_ai_tailor.py \
 	--output-prefix "output_filename_prefix"
 ```
 This will process the job posting, tailor your resume and cover letter based on the posting, and save the tailored documents in the specified output directory.
+
+## Documentation
+
+Docstrings live in the code (not paying to get a wiki here), but here is a class diagram...
+
+![Class diagram](assets/classes_Resume-AI-Tailor.png)

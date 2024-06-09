@@ -10,4 +10,11 @@ lint:
 	black resume_ai_tailor.py
 	pylint resume_ai_tailor.py
 
+docs:
+	pyreverse --filter-mode 'ALL' \
+	-o png \
+	 --output-directory "assets" \
+	-p  Resume-AI-Tailor \
+	resume_ai_tailor.py
+
 .FORCE:
