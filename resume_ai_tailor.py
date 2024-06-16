@@ -18,6 +18,8 @@ from typing import Dict, Any, cast, Optional, List, Union, Tuple
 from abc import ABC, abstractmethod
 import argparse
 import json
+from jsonschema import validate
+from jsonschema.exceptions import ValidationError
 import re
 from datetime import datetime
 import time
@@ -75,6 +77,7 @@ class ResumeAiTailorPipeline:  # pylint: disable=too-few-public-methods
             self._create_folder_with_timestamp()  #  pylint: disable=protected-access
             ._create_resume()  #  pylint: disable=protected-access
             ._create_cover_letter()  #  pylint: disable=protected-access
+            ._create_makefile()  #  pylint: disable=protected-access
         )
         return self
 
@@ -133,6 +136,14 @@ class ResumeAiTailorPipeline:  # pylint: disable=too-few-public-methods
         )
         return self
 
+    def _create_makefile(self) -> ResumeAiTailorPipeline:
+
+        makefile = f"run: .FORCE\n\txelatex {self._resume.get_file_name()}\n\txelatex {self._cover_letter.get_file_name()}\n\trm *.aux *.log *.out\n\n.FORCE:\n"
+
+        with open(f"{self._output_folder}/Makefile", "w", encoding="utf-8") as file:
+            file.write(makefile)
+        return self
+
 
 class JobPosting:
     """
@@ -177,7 +188,7 @@ class JobPosting:
                 service = Service(ChromeDriverManager().install())
                 driver = webdriver.Chrome(service=service, options=options)
                 driver.get(self._job_posting_url)
-                time.sleep(5)
+                time.sleep(10)
                 self._job_posting_content = driver.find_element(
                     By.TAG_NAME, "body"
                 ).text
@@ -217,7 +228,9 @@ class AIClient:
         """
         self._open_ai_client: OpenAI = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-    def _send_open_ai_request(self, message: str) -> str:
+    def _send_open_ai_request(
+        self, message: str, schema: str = None, retries: int = 1
+    ) -> str:
         """
         Sends a request to the OpenAI API and returns the response.
 
@@ -227,17 +240,29 @@ class AIClient:
         Returns:
             str: The AI's response as a string.
         """
-        response = self._open_ai_client.chat.completions.create(
-            model="gpt-4-turbo",
-            messages=[
-                {
-                    "role": "user",
-                    "content": message,
-                }
-            ],
-            max_tokens=1024,
-        )
-        return cast(str, response.choices[0].message.content)
+        while retries > 0:
+            retries -= 1
+            response = self._open_ai_client.chat.completions.create(
+                model="gpt-4-turbo",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": message,
+                    }
+                ],
+                max_tokens=1024,
+            )
+            response = cast(str, response.choices[0].message.content)
+            if schema is not None:
+                data = json.loads(response)
+                try:
+                    validate(instance=data, schema=schema)
+                    break
+                except ValidationError as ve:
+                    print("JSON data is invalid.")
+                    print("Error:", ve)
+
+        return response
 
     def get_job_title_and_company(self, job_posting_content: str) -> str:
         """
@@ -275,7 +300,7 @@ class AIClient:
 
     def get_tailored_work_experience(
         self, job_posting_content: str, company: str, company_description: str
-    ) -> str:
+    ) -> Optional[List[str]]:
         """
         Requests the AI to tailor the work experience description to the job posting.
 
@@ -287,17 +312,40 @@ class AIClient:
         Returns:
             str: Tailored work experience description.
         """
+
+        schema = {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+                "experience_description": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "A list of strings.",
+                }
+            },
+            "required": ["experience_description"],
+        }
+
         message = f"""Analyze the following job posting content:
         {job_posting_content}
 
         Analyze the experience I had at {company} which is a list in JSON format:
         {company_description}
         
-        Tailor this list to the job posting and return a list back in the same JSON format.
+        Tailor this list to the job posting and return a list back in JSON format
+        that follows the following JSON schema:
+
+        {schema}
 
         Do not return anything before or after the JSON code and do not include ```
         """
-        return self._send_open_ai_request(message)
+
+        response = json.loads(self._send_open_ai_request(message, schema, 3))
+        return (
+            response["experience_description"]
+            if "experience_description" in response
+            else None
+        )
 
     def get_tailored_cover_letter(
         self, job_posting_content: str, personal_information, resume_content
@@ -347,7 +395,9 @@ class LaTeXtoJSONParser:
             Dict[str, str]: A dictionary with keys 'name', 'address', 'phone', and 'email' mapped to
             their respective values.
         """
-        latex_content = latex_content.replace("\\&", "__AND__")
+        latex_content = latex_content.replace("\\&", "__AND__").replace(
+            "\\%", "__PERCENT__"
+        )
         name_match = re.search(r"\\name\{([^}]+)\}\{([^}]+)\}", latex_content)
         address_match = re.search(r"\\address\{([^}]+)\}", latex_content)
         phone_match = re.search(r"\\phone\[mobile\]\{([^}]+)\}", latex_content)
@@ -571,7 +621,9 @@ class LaTeXtoJSONParser:
             the resume ('skills', 'certificates', 'experience', etc.) and each value is a list of
             parsed entities.
         """
-        latex_content = latex_content.replace("\\&", "__AND__")
+        latex_content = latex_content.replace("\\&", "__AND__").replace(
+            "\\%", "__PERCENT__"
+        )
         latex_content = re.search(
             r"\\begin\{document\}(.*?)\\end\{document\}", latex_content, re.DOTALL
         ).group(1)
@@ -592,7 +644,7 @@ class LaTeXtoJSONParser:
             elif isinstance(obj, list):
                 return [replace_in_dict(item) for item in obj]
             elif isinstance(obj, str):
-                return obj.replace("__AND__", "\\&")
+                return obj.replace("__AND__", "\\&").replace("__PERCENT__", "\\%")
             return obj
 
         return replace_in_dict(resume)
@@ -622,6 +674,7 @@ class Document(ABC):
         """
         self._output_folder: str = output_folder
         self._file_prefix: str = file_prefix
+        self._file_name: str = None
         self._job_posting: JobPosting = job_posting
         self._ai_client: AIClient = AIClient()
         self._doc_type: str = None
@@ -632,6 +685,10 @@ class Document(ABC):
         """
         Abstract method to create the document content. Must be implemented by subclasses.
         """
+
+    def get_file_name(self) -> str:
+        """Returns the file name of this document"""
+        return self._file_name
 
     def _compile_latex_to_pdf(self, tex_file: str) -> None:
         """
@@ -662,11 +719,22 @@ class Document(ABC):
             Document: The instance of the document with updated content.
         """
         company_name, job_title = self._job_posting.get_company_name_and_job_title()
-        file_name = f"{self._output_folder}/{self._file_prefix}_{company_name}_{job_title}_{self._doc_type}.tex"  # pylint: disable=line-too-long
-        file_name = file_name.replace(" ", "_")
-        with open(file_name, "w", encoding="utf-8") as file:
+        self._file_name = (
+            f"{self._file_prefix}_{company_name}_{job_title}_{self._doc_type}.tex"
+        )
+        self._file_name = (
+            self._file_name.replace(" ", "_")
+            .replace(",", "")
+            .replace("(", "")
+            .replace(")", "")
+            .replace("/", "_")
+        )
+        file_path = (
+            f"{self._output_folder}/{self._file_name}"  # pylint: disable=line-too-long
+        )
+        with open(file_path, "w", encoding="utf-8") as file:
             file.write(self._doc_content)
-        self._compile_latex_to_pdf(file_name)
+        self._compile_latex_to_pdf(file_path)
         return self
 
 
@@ -737,9 +805,8 @@ class Resume(Document):
                     i == num_roles - 1 and company["description"]
                 ):  # Check if it's the last role and there is a description
                     # Open the last role with a description block
-                    latex_output += (
-                        f"\\cventry{{{role['period']}}}{{{job_title}}}{{}}{{}}{{}}{{\n"
-                    )
+                    location = company["location"] if i == 0 else ""
+                    latex_output += f"\\cventry{{{role['period']}}}{{{job_title}}}{{{location}}}{{}}{{}}{{\n"
                     latex_output += "    \\begin{itemize}\n"
                     for item in company["description"]:
                         latex_output += f"        \\item {item}\n"
@@ -789,8 +856,9 @@ class Resume(Document):
                 company=experience["company"],
                 company_description=experience["description"],
             )
-            experience["description"] = json.loads(response)
-            tailored_experience.append(experience)
+            if response is not None:
+                experience["description"] = response
+                tailored_experience.append(experience)
 
         tailored_resume_latex = self._doc_content
         experience_latex = self._json_to_latex_experience(tailored_experience).replace(
